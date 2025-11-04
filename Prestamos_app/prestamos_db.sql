@@ -1,974 +1,1004 @@
-CREATE DATABASE prestamos_db;
-
-USE prestamos_db;
-
--- Catalogos generales
-CREATE TABLE cat_genero(
-    id_genero INT AUTO_INCREMENT PRIMARY KEY,
-    genero VARCHAR(50) NOT NULL
-);
-Insert into cat_genero (genero) values ('Masculino'), ('Femenino'), ('Otro');
-
-CREATE TABLE cat_tipo_pago(
-    id_tipo_pago INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_pago VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_pago (tipo_pago) values ('Efectivo'), ('Transferencia'), ('Cheque');
-
-CREATE TABLE cat_estado_prestamo(
-    id_estado_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    estado VARCHAR(50) NOT NULL
-);
-Insert into cat_estado_prestamo (estado) values ('Activo'), ('En evaluacion'), ('Rechazado'), ('En mora'), ('Cerrado');
-
-CREATE TABLE cat_periodo_pago(
-    id_periodo_pago INT AUTO_INCREMENT PRIMARY KEY,
-    periodo VARCHAR(50) NOT NULL
-);
-Insert into cat_periodo_pago (periodo) values ('Semanal'), ('Quincenal'), ('Mensual');
-
-CREATE TABLE cat_tipo_documento(
-    id_tipo_documento INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_documento VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_documento (tipo_documento) values ('Cedula'), ('Pasaporte'), ('Licencia de conducir');
-
-CREATE TABLE cat_nivel_riesgo(
-    id_nivel_riesgo INT AUTO_INCREMENT PRIMARY KEY,
-    nivel VARCHAR(50) NOT NULL
-);
-Insert into cat_nivel_riesgo (nivel) values ('Bajo'), ('Medio'), ('Alto');
-
-CREATE TABLE cat_tipo_promocion(
-    id_tipo_promocion INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_promocion VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_promocion (tipo_promocion) values ('Descuento'), ('Promoción'), ('Tasa interes mas baja');
-
-CREATE TABLE cat_tipo_entidad(
-    id_tipo_entidad INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_entidad VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_entidad (tipo_entidad) values ('Cliente'), ('Empleado'), ('Propiedad'), ('Financiador');
-
-CREATE TABLE cat_tipo_contrato(
-    id_tipo_contrato INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_contrato VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_contrato (tipo_contrato) values ('Medio tiempo'), ('Tiempo completo'), ('Pasantia');
-
-CREATE TABLE cat_tipo_moneda(
-    id_tipo_moneda INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_moneda VARCHAR(50) NOT NULL,
-    valor Decimal(10,2) NOT NULL
-);
-Insert into cat_tipo_moneda (tipo_moneda, valor) values ('DOP', 1.00), ('USD', 62.97);
-
-CREATE TABLE cat_tipo_deduccion(
-    id_tipo_deduccion INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_deduccion VARCHAR(50) NOT NULL
-);
-Insert into cat_tipo_deduccion (tipo_deduccion) values ('ISR'), ('AFP'), ('SFS');
-
-CREATE TABLE cat_beneficio(
-    id_beneficio INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_beneficio VARCHAR(50) NOT NULL
-);
-Insert into cat_beneficio (tipo_beneficio) values ('Seguro médico'), ('Bonificación'), ('Vacaciones pagadas');
-
--- Tablas principales 
-
-CREATE TABLE datos_persona(
-    id_datos_persona INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100)NOT NULL,
-    apellido VARCHAR(100)NOT NULL,
-    fecha_nacimiento DATE NOT NULL,
-    genero INT,
-    estado_cliente ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (genero) REFERENCES cat_genero(id_genero)
-);
-
-CREATE TABLE email(
-    id_email INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    email VARCHAR(100) NOT NULL,
-    es_principal BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
-CREATE TABLE telefono(
-    id_telefono INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    telefono VARCHAR(20) NOT NULL,
-    es_principal BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
-CREATE TABLE documento_identidad(
-    id_documento_identidad INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    id_tipo_documento INT,
-    numero_documento VARCHAR(50) NOT NULL UNIQUE,
-    fecha_emision DATE NOT NULL,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona),
-    FOREIGN KEY (id_tipo_documento) REFERENCES cat_tipo_documento(id_tipo_documento)
-);
-
-CREATE TABLE direccion(
-    id_direccion INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    ciudad VARCHAR(100) NOT NULL,
-    sector VARCHAR(100) NOT NULL,
-    calle VARCHAR(100) NOT NULL,
-    numero_casa INT NOT NULL,
-    es_principal BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)   
-);
-
-CREATE TABLE direccion_entidad(
-    id_direccion_entidad INT AUTO_INCREMENT PRIMARY KEY,
-    id_direccion INT,
-    id_tipo_entidad INT,
-    tipo_direccion VARCHAR(50) NOT NULL,
-    FOREIGN KEY (id_direccion) REFERENCES direccion(id_direccion),
-    FOREIGN KEY (id_tipo_entidad) REFERENCES cat_tipo_entidad(id_tipo_entidad)
-);
-
-CREATE TABLE ocupacion(
-    id_ocupacion INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    ocupacion VARCHAR(100) NOT NULL,
-    empresa VARCHAR(100) NOT NULL,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
--- Tablas para clientes 
-
-CREATE TABLE cliente(
-    id_cliente INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
-CREATE TABLE ingresos_egresos(
-    id_ingresos_egresos INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    ingresos_mensuales DECIMAL(10,2) NOT NULL,
-    egresos_mensuales DECIMAL(10,2) NOT NULL,
-    CONSTRAINT chk_ingresos_egresos CHECK (ingresos_mensuales >= 0 AND egresos_mensuales >= 0),
-    CONSTRAINT chk_saldo CHECK (ingresos_mensuales <= egresos_mensuales),
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente)
-);
-
-CREATE TABLE fuente_ingreso(
-    id_fuente_ingreso INT AUTO_INCREMENT PRIMARY KEY,
-    id_ingresos_egresos INT,
-    fuente VARCHAR(100) NOT NULL,
-    FOREIGN KEY (id_ingresos_egresos) REFERENCES ingresos_egresos(id_ingresos_egresos)
-);
-
-CREATE TABLE documentacion_cliente(
-    id_documentacion_cliente INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    id_tipo_documento INT,
-    ruta_documento VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_tipo_documento) REFERENCES cat_tipo_documento(id_tipo_documento)
-);
-
-CREATE TABLE puntaje_crediticio(
-    id_puntaje_crediciticio INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    id_nivel_riesgo INT,
-    puntaje INT DEFAULT 0,
-    total_transacciones INT NOT NULL,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_nivel_riesgo) REFERENCES cat_nivel_riesgo(id_nivel_riesgo)
-);
-
--- Tabla prestamos 
-
-CREATE TABLE tipo_prestamo(
-    id_tipo_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    tasa_interes DECIMAL(5,2) NOT NULL,
-    monto_minimo DECIMAL(10,2) NOT NULL,
-    tipo_amortizacion VARCHAR(50) NOT NULL,
-    plazo_minimo_meses INT NOT NULL,
-    plazo_maximo_meses INT NOT NULL
-);
-
-CREATE TABLE prestamo(
-    id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT, 
-    id_tipo_prestamo INT,
-    monto_solicitado DECIMAL(10,2) NOT NULL,
-    fecha_solicitud DATE NOT NULL,
-    plazo_meses INT NOT NULL,
-    id_estado_prestamo INT,
-    id_condicion_actual INT,
-    creado_por INT,
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT chk_monto_solicitado CHECK (monto_solicitado > 0),
-    CONSTRAINT chk_plazo_meses CHECK (plazo_meses BETWEEN 1 AND 50),
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_tipo_prestamo) REFERENCES tipo_prestamo(id_tipo_prestamo),
-    FOREIGN KEY (id_estado_prestamo) REFERENCES cat_estado_prestamo(id_estado_prestamo),
-    FOREIGN KEY (id_condicion_actual) REFERENCES condicion_prestamo(id_condicion_prestamo),
-    FOREIGN KEY (creado_por) REFERENCES usuario(id_usuario)
-);
-
-CREATE TABLE prestamo_personal(
-    id_prestamo_personal INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    motivo VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE prestamos_hipotecario(
-    id_prestamo_hipotecario INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    valor_propiedad DECIMAL(10,2) NOT NULL,
-    porcentaje_financiamiento DECIMAL(5,2) NOT NULL,
-    direccion_propiedad VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE condicion_prestamo(
-    id_condicion_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    tasa_interes DECIMAL(5,2) NOT NULL,
-    tipo_interes VARCHAR(50) NOT NULL,
-    tipo_amortizacion VARCHAR(50) NOT NULL,
-    id_periodo_pago INT,
-    vigente_desde DATE NOT NULL,
-    vigente_hasta DATE,
-    esta_activo BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    FOREIGN KEY (id_periodo_pago) REFERENCES cat_periodo_pago(id_periodo_pago)
-);
-
-CREATE TABLE propiedades(
-    id_propiedad INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT, 
-    id_direccion INT,
-    valor_propiedad DECIMAL(10,2) NOT NULL,
-    fecha_registro DATE NOT NULL,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_direccion) REFERENCES direccion(id_direccion)
-);
-
-CREATE TABLE prestamo_propiedad(
-    id_prestamo_propiedad INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    id_propiedad INT,
-    porcentaje_garantia DECIMAL(5,2) NOT NULL,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    FOREIGN KEY (id_propiedad) REFERENCES propiedades(id_propiedad)
-);
-
-CREATE TABLE garantia(
-    id_garantia INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    descripcion VARCHAR(255) NOT NULL,
-    valor DECIMAL(10,2) NOT NULL,
-    id_cliente INT,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE retiro_garantia(
-    id_retiro_garantia INT AUTO_INCREMENT PRIMARY KEY,
-    id_pago INT,
-    id_garantia INT,
-    fecha_uso DATE NOT NULL,
-    monto_usado DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (id_pago) REFERENCES pago(id_pago),
-    FOREIGN KEY (id_garantia) REFERENCES garantia(id_garantia)
-);
-
-CREATE TABLE desembolso(
-    id_desembolso INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    monto_desembolsado DECIMAL(10,2) NOT NULL,
-    fecha_desembolso DATE NOT NULL,
-    metodo_entrega INT,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    FOREIGN KEY (metodo_entrega) REFERENCES cat_tipo_pago(id_tipo_pago)
-);
-
-CREATE TABLE cronograma_cuota(
-    id_cronograma_cuota INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    numero_cuota INT NOT NULL,
-    fecha_vencimiento DATE NOT NULL,
-    capital_cuota DECIMAL(10,2) NOT NULL,
-    interes_cuota DECIMAL(10,2) NOT NULL,
-    cargos_cuota DECIMAL(10,2) DEFAULT 0.00,
-    total_monto DECIMAL(10,2) NOT NULL,
-    saldo_pendiente DECIMAL(10,2) NOT NULL,
-    estado_cuota ENUM('Pendiente', 'Pagada', 'Vencida') DEFAULT 'Pendiente',
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
--- Seguimiento de prestamos 
-
-CREATE TABLE evaluacion_prestamo(
-    id_evaluacion_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    id_prestamo INT,
-    capacidad_pago DECIMAL(10,2) NOT NULL,
-    nivel_riesgo INT,
-    estado_evaluacion ENUM('Aprobado', 'Rechazado', 'Pendiente') NOT NULL,
-    fecha_evaluacion DATE NOT NULL,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE detalle_evaluacion(
-    id_detalle_evaluacion INT AUTO_INCREMENT PRIMARY KEY,
-    id_evaluacion_prestamo INT,
-    fecha DATE NOT NULL,
-    observacion TEXT NOT NULL,
-    evaluado_por INT,
-    FOREIGN KEY (id_evaluacion_prestamo) REFERENCES evaluacion_prestamo(id_evaluacion_prestamo),
-    FOREIGN KEY (evaluado_por) REFERENCES usuario(id_usuario)
-);
-
--- notificaciones 
-
-CREATE TABLE plantilla_notificacion(
-    id_plantilla_notificacion INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_notificacion VARCHAR(100) NOT NULL,
-    asunto VARCHAR(150) NOT NULL,
-    cuerpo TEXT NOT NULL,
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE notificaciones(
-    id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    id_plantilla_notificacion INT,
-    canal_envio VARCHAR(100) NOT NULL,
-    programada_para TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    estado_envio ENUM('Enviado', 'Fallido', 'Pendiente') DEFAULT 'Pendiente',
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_plantilla_notificacion) REFERENCES plantilla_notificacion(id_plantilla_notificacion)
-);
-
--- Reestructuracion de prestamos 
-
-CREATE TABLE reestructuracion_prestamo(
-    id_restructuracion_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    id_condicion_nueva INT,
-    fecha_reestructuracion DATE NOT NULL,
-    aprobado_por INT,
-    notas TEXT,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    FOREIGN KEY (id_condicion_nueva) REFERENCES condicion_prestamo(id_condicion_prestamo),
-    FOREIGN KEY (aprobado_por) REFERENCES usuario(id_usuario)
-);
-
--- Pagos
-
-CREATE TABLE pago(
-    id_pago INT AUTO_INCREMENT PRIMARY KEY,
-    id_prestamo INT,
-    fecha_pago DATE NOT NULL,
-    monto_pagado DECIMAL(10,2) NOT NULL,
-    metodo_pago INT,
-    id_tipo_moneda INT,
-    creado_por INT,
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_monto_pagado CHECK (monto_pagado > 0),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    FOREIGN KEY (metodo_pago) REFERENCES cat_tipo_pago(id_tipo_pago),
-    FOREIGN KEY (id_tipo_moneda) REFERENCES cat_tipo_moneda(id_tipo_moneda),
-    FOREIGN KEY (creado_por) REFERENCES usuario(id_usuario)
-);
-
-CREATE TABLE asignacion_pago(
-    id_asignacion_pago INT AUTO_INCREMENT PRIMARY KEY,
-    id_pago INT,
-    id_cronograma_cuota INT,
-    monto_asignado DECIMAL(10,2) NOT NULL,
-    tipo_asignacion ENUM('Capital', 'Interes', 'Cargos') NOT NULL,
-    FOREIGN KEY (id_pago) REFERENCES pago(id_pago),
-    FOREIGN KEY (id_cronograma_cuota) REFERENCES cronograma_cuota(id_cronograma_cuota)
-);
-
-CREATE TABLE facturas(
-    id_factura INT AUTO_INCREMENT PRIMARY KEY,
-    id_pago INT,
-    numero_factura VARCHAR(50) unique NOT NULL,
-    fecha_emision DATE NOT NULL,
-    ruta_archivo VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_pago) REFERENCES pago(id_pago)
-);
-
--- Reportes 
-
-CREATE TABLE reportes(
-    id_reportes INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_reporte VARCHAR(100) NOT NULL,
-    parametros TEXT,
-    fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    generado_por INT,
-    ruta_archivo VARCHAR(255) NOT NULL,
-    FOREIGN KEY (generado_por) REFERENCES usuario(id_usuario)
-);
-
-CREATE TABLE reportes_prestamo(
-    id_reportes_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_reporte INT,
-    id_prestamo INT,
-    FOREIGN KEY (id_reporte) REFERENCES reportes(id_reportes),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE reportes_cliente(
-    id_reportes_cliente INT AUTO_INCREMENT PRIMARY KEY,
-    id_reporte INT,
-    id_cliente INT,
-    FOREIGN KEY (id_reporte) REFERENCES reportes(id_reportes),
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente)
-);
-
--- Usuarios y roles 
-
-CREATE TABLE usuarios(
-    id_usuarios INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    nombre_usuario VARCHAR(50) UNIQUE NOT NULL,
-    contrasena VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
-CREATE TABLE roles(
-    id_rol INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_rol VARCHAR(50) UNIQUE NOT NULL,
-    descripcion VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE permisos(
-    id_permiso INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_permiso VARCHAR(100) UNIQUE NOT NULL,
-    descripcion VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE usuarios_roles(
-    id_usuario_rol INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT,
-    id_rol INT,
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuarios),
-    FOREIGN KEY (id_rol) REFERENCES roles(id_rol)
-);
-
-CREATE TABLE roles_permisos(
-    id_rol_permiso INT AUTO_INCREMENT PRIMARY KEY,
-    id_rol INT,
-    id_permiso INT,
-    FOREIGN KEY (id_rol) REFERENCES roles(id_rol),
-    FOREIGN KEY (id_permiso) REFERENCES permisos(id_permiso)
-);
-
-CREATE TABLE historial_acceso(
-    id_historial_acceso INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuarios INT,
-    fecha_acceso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ip_acceso VARCHAR(45),
-    accion VARCHAR(255) NOT NULL,
-    FOREIGN KEY (id_usuarios) REFERENCES usuarios(id_usuarios)
-);
-
--- Administracion de empleados 
-
-CREATE TABLE empleado(
-    id_empleado INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    id_tipo_contrato INT,
-    rol VARCHAR(100) NOT NULL,
-    salario DECIMAL(10,2) NOT NULL,
-    fecha_contratacion DATE NOT NULL,
-    activo BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona),
-    FOREIGN KEY (id_tipo_contrato) REFERENCES cat_tipo_contrato(id_tipo_contrato)
-);
-
-CREATE TABLE asistencia_empleado(
-    id_asistencia_empleado INT AUTO_INCREMENT PRIMARY KEY,
-    id_empleado INT,
-    hora_entrada TIMESTAMP NOT NULL,
-    hora_salida TIMESTAMP,
-    retrasos INT DEFAULT 0,
-    FOREIGN KEY (id_empleado) REFERENCES empleado(id_empleado)
-);
-
-CREATE TABLE nomina_empleado(
-    id_nomina_empleado INT AUTO_INCREMENT PRIMARY KEY,
-    id_empleado INT,
-    sueldo_base DECIMAL(10,2) NOT NULL,
-    descuento DECIMAL(10,2) DEFAULT 0.00,
-    sueldo_neto DECIMAL(10,2) NOT NULL,
-    fecha_pago DATE NOT NULL,
-    FOREIGN KEY (id_empleado) REFERENCES empleado(id_empleado)
-);
-
-CREATE TABLE deducciones_empleado(
-    id_empleado_deduccion INT AUTO_INCREMENT PRIMARY KEY,
-    id_nomina_empleado INT,
-    id_tipo_deduccion INT,
-    monto DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (id_nomina_empleado) REFERENCES nomina_empleado(id_nomina_empleado),
-    FOREIGN KEY (id_tipo_deduccion) REFERENCES cat_tipo_deduccion(id_tipo_deduccion)
-);
-
-CREATE TABLE beneficios_empleado(
-    id_beneficio_empleado INT AUTO_INCREMENT PRIMARY KEY,
-    id_nomina_empleado INT,
-    id_beneficio INT,
-    monto DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (id_nomina_empleado) REFERENCES nomina_empleado(id_nomina_empleado),
-    FOREIGN KEY (id_beneficio) REFERENCES cat_beneficio(id_beneficio)
-);
-
-CREATE TABLE horas_extras(
-    id_horas_extras INT AUTO_INCREMENT PRIMARY KEY,
-    id_empleado INT,
-    cantidad_horas INT NOT NULL,
-    pago_horas_extras DECIMAL(10,2) NOT NULL,
-    monto_total DECIMAL(10,2) NOT NULL,
-    fecha DATE NOT NULL,
-    FOREIGN KEY (id_empleado) REFERENCES empleado(id_empleado)
-);
-
--- Promociones y descuentos 
-CREATE TABLE tipo_beneficio(
-    id_tipo_beneficio INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_beneficio VARCHAR(50) NOT NULL,
-    descripcion VARCHAR(255) NOT NULL,
-    puntos_necesarios INT NOT NULL,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE promociones(
-    id_promocion INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_promocion VARCHAR(100) NOT NULL,
-    estado ENUM('Activa', 'Inactiva') DEFAULT 'Inactiva',
-    fecha_inicio DATE NOT NULL,
-    fecha_fin DATE NOT NULL,
-    id_tipo_promocion INT,
-    id_tipo_beneficio INT,
-    FOREIGN KEY (id_tipo_promocion) REFERENCES cat_tipo_promocion(id_tipo_promocion),
-    FOREIGN KEY (id_tipo_beneficio) REFERENCES tipo_beneficio(id_tipo_beneficio)
-);
-
-CREATE TABLE asignacion_promocion(
-    id_asignacion_promocion INT AUTO_INCREMENT PRIMARY KEY,
-    id_cliente INT,
-    id_promocion INT,
-    fecha_asignacion DATE NOT NULL,
-    estado_promocion ENUM('Activa', 'Usada', 'Expirada') DEFAULT 'Activa',
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_promocion) REFERENCES promociones(id_promocion)
-);
-
-CREATE TABLE uso_promocion(
-    id_uso_promocion INT AUTO_INCREMENT PRIMARY KEY,
-    id_asignacion_promocion INT,
-    id_prestamo INT,
-    fecha_uso DATE NOT NULL,
-    FOREIGN KEY (id_asignacion_promocion) REFERENCES asignacion_promocion(id_asignacion_promocion),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
-);
-
-CREATE TABLE campañas_promocion(
-    id_campaña_promocion INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_campaña VARCHAR(100) NOT NULL,
-    descripcion TEXT NOT NULL,
-    fecha_inicio DATE NOT NULL,
-    fecha_fin DATE NOT NULL,
-    estado_campaña ENUM('Activa', 'Inactiva') DEFAULT 'Inactiva'
-);
-
-CREATE TABLE promociones_campaña(
-    id_promocion_campaña INT AUTO_INCREMENT PRIMARY KEY,
-    id_promocion INT,
-    id_campaña_promocion INT,
-    FOREIGN KEY (id_promocion) REFERENCES promociones(id_promocion),
-    FOREIGN KEY (id_campaña_promocion) REFERENCES campañas_promocion(id_campaña_promocion)
-);
-
--- Tablas a considerar 
-
-CREATE TABLE financiador(
-    id_financiador INT AUTO_INCREMENT PRIMARY KEY,
-    id_datos_persona INT,
-    nombre_empresa VARCHAR(100) NOT NULL,
-    estado_financiador BOOLEAN DEFAULT TRUE,
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (id_datos_persona) REFERENCES datos_persona(id_datos_persona)
-);
-
-CREATE TABLE inversion(
-    id_inversion INT AUTO_INCREMENT PRIMARY KEY,
-    id_financiador INT, 
-    monto_invertido DECIMAL(10,2) NOT NULL,
-    fecha_inversion DATE NOT NULL,
-    plazo_meses INT NOT NULL,
-    id_condiciones INT,
-    tasa_interes DECIMAL(5,2) NOT NULL,
-    FOREIGN KEY (id_condiciones) REFERENCES condiciones(id_condiciones),
-    FOREIGN KEY (id_financiador) REFERENCES financiador(id_financiador)
-);
-
-CREATE TABLE condiciones(
-    id_condiciones INT AUTO_INCREMENT PRIMARY KEY,
-    descripcion VARCHAR(255) NOT NULL,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE retiro_inversion(
-    id_retiro_inversion INT AUTO_INCREMENT PRIMARY KEY,
-    id_inversion INT,
-    fecha_retiro DATE NOT NULL,
-    monto_retirado DECIMAL(10,2) NOT NULL,
-    id_pago INT, 
-    FOREIGN KEY (id_inversion) REFERENCES inversion(id_inversion),
-    FOREIGN KEY (id_pago) REFERENCES pago(id_pago)
-);
-
--- CAJA
-
-CREATE TABLE caja(
-    id_caja INT AUTO_INCREMENT PRIMARY KEY,
-    id_empleado INT,
-    monto_asignado DECIMAL(10,2) NOT NULL,
-    fecha_apertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_cierre TIMESTAMP,
-    estado_caja ENUM('Abierta', 'Cerrada') DEFAULT 'Abierta',
-    FOREIGN KEY (id_empleado) REFERENCES empleado(id_empleado)
-);
-
-CREATE TABLE movimiento_caja(
-    id_movimiento_caja INT AUTO_INCREMENT PRIMARY KEY,
-    id_caja INT,
-    fecha_movimiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    tipo_movimiento ENUM('Ingreso', 'Egreso') NOT NULL,
-    monto DECIMAL(10,2) NOT NULL,
-    motivo VARCHAR(255) NOT NULL,
-    id_usuario INT,
-    FOREIGN KEY (id_caja) REFERENCES caja(id_caja),
-    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
-);
-
--- fondos 
-
-CREATE TABLE fondos(
-    id_fondo INT AUTO_INCREMENT PRIMARY KEY,
-    cartera_normal DECIMAL(15,2) NOT NULL,
-    cartera_vencida DECIMAL(15,2) NOT NULL,
-    total_fondos DECIMAL(15,2) NOT NULL,
-    actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE movimiento_fondo(
-    id_mov_fondo INT AUTO_INCREMENT PRIMARY KEY,
-    id_fondo INT,
-    id_caja INT,
-    monto DECIMAL(15,2) NOT NULL,
-    fecha_movimiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    tipo_movimiento ENUM('aporte', 'desembolso') NOT NULL,
-    FOREIGN KEY (id_fondo) REFERENCES fondos(id_fondo),
-    FOREIGN KEY (id_caja) REFERENCES caja(id_caja)
-);
-
--- Auditoria
-
-CREATE TABLE auditoria_cambios(
-    id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
-    tabla_afectada VARCHAR(100) NOT NULL,
-    id_registro INT NOT NULL,
-    tipo_cambio ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
-    fecha_cambio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    realizado_por INT,
-    valores_anteriores JSON,
-    valores_nuevos JSON,
-    FOREIGN KEY (realizado_por) REFERENCES usuario(id_usuario)
-);
-
--- Indices 
-
-CREATE INDEX idx_datos_persona_genero ON datos_persona(genero);
-CREATE UNIQUE INDEX idx_documento_identidad_numero ON documento_identidad(numero_documento);
-
-CREATE INDEX idx_email_persona ON email(id_datos_persona, es_principal);
-CREATE INDEX idx_telefono_persona ON telefono(id_datos_persona, es_principal);
-
-CREATE INDEX idx_cliente_datos ON cliente(id_datos_persona);
-CREATE INDEX idx_ingresos_cliente ON ingresos_egresos(id_cliente);
-CREATE INDEX idx_fuente_ingreso ON fuente_ingreso(id_ingresos_egresos);
-CREATE INDEX idx_doc_cliente ON documentacion_cliente(id_cliente,id_tipo_documento);
-CREATE INDEX idx_puntaje_cliente ON puntaje_crediticio(id_cliente, id_nivel_riesgo);
-
-CREATE INDEX idx_prestamo_cliente ON prestamo(id_cliente);
-CREATE INDEX idx_prestamo_estado ON prestamo(id_estado_prestamo);
-CREATE INDEX idx_prestamo_tipo ON prestamo(id_tipo_prestamo);
-CREATE INDEX idx_prestamo_fecha ON prestamo (fecha_solicitud);
-CREATE INDEX idx_prestamo_creador ON prestamo (creado_por);
-CREATE INDEX idx_cronograma_prestamo ON cronograma_cuota(id_prestamo,estado_cuota);
-
-CREATE INDEX idx_pago_prestamo ON pago(id_prestamo);
-CREATE INDEX idx_pago_metodo ON pago(metodo_pago);
-CREATE INDEX idx_asignacion_pago ON asignacion_pago(id_pago, id_cronograma_cuota);
-CREATE INDEX idx_factura_pago ON facturas(id_pago);
-
-CREATE INDEX idx_propiedades_cliente ON propiedades(id_cliente);
-CREATE INDEX idx_propiedades_direccion ON propiedades(id_direccion);
-CREATE INDEX idx_prestamo_propiedad ON prestamo_propiedad(id_prestamo, id_propiedad);
-CREATE INDEX idx_garantia_prestamo_cliente ON garantia(id_prestamo, id_cliente);
-
-CREATE INDEX idx_evaluacion_cliente ON evaluacion_prestamo(id_cliente, id_prestamo);
-CREATE INDEX idx_detalle_evaluacion ON detalle_evaluacion(id_evaluacion_prestamo);
-
-CREATE UNIQUE INDEX idx_usuario_nombre ON usuarios(nombre_usuario);
-CREATE INDEX idx_usuario_roles ON usuarios_roles(id_usuario, id_rol);
-CREATE INDEX idx_roles_permisos ON roles_permisos(id_rol, id_permiso);
-
-CREATE INDEX idx_notificacion_cliente ON notificaciones(id_cliente);
-CREATE INDEX idx_notificacion_plantilla ON notificaciones(id_plantilla_notificacion);
-
-CREATE INDEX idx_empeleado_datos ON empleado(id_datos_persona);
-CREATE INDEX idx_asistencia_empleado ON asistencia_empleado(id_empleado);
-CREATE INDEX idx_nomina_empleado ON nomina_empleado(id_empleado);
-CREATE INDEX idx_deducciones_nomina ON deducciones_empleado(id_nomina_empleado);
-CREATE INDEX idx_beneficios_nomina ON beneficios_empleado(id_nomina_empleado);
-CREATE INDEX idx_horas_extra ON horas_extras(id_empleado);
-
-CREATE INDEX idx_asignacion_promocion ON asignacion_promocion(id_cliente);
-CREATE INDEX idx_promocion_tipo ON promociones(id_tipo_promocion);
-CREATE INDEX idx_promocion_campaña ON promociones_campaña(id_promocion, id_campaña_promocion);
-
-CREATE INDEX idx_financiador_persona ON financiador(id_datos_persona);
-CREATE INDEX idx_inversion_financiador ON inversion(id_financiador);
-CREATE INDEX idx_retiro_inversion ON retiro_inversion(id_inversion);
-
-CREATE INDEX idx_caja_empleado ON caja(id_empleado);
-CREATE INDEX idx_movimiento_caja ON movimiento_caja(id_caja);
-CREATE INDEX idx_movimiento_fondo ON movimiento_fondo(id_fondo, id_caja);
-
-CREATE INDEX idx_auditoria_tabla_fecha ON auditoria_cambios(tabla_afectada, fecha_cambio);
-
--- Logica de negocio
-
-DELIMITER // 
-
-CREATE PROCEDURE generar_pago(IN p_id_prestamo INT, IN p_monto_pago DECIMAL(10,2), IN p_metodo_pago INT, IN p_tipo_moneda INT, IN p_creado_por INT, IN p_fecha_pago DATE, OUT p_id_pago INT)
-BEGIN
-    DECLARE v_saldo_restante DECIMAL(10,2);
-    DECLARE v_monto DECIMAL(10,2);
-    DECLARE v_id_cuota INT;
-    DECLARE v_cuotas_pendientes INT;
-    DECLARE v_estado VARCHAR(20);
-
-    SELECT COUNT(*) INTO v_cuotas_pendientes
-    FROM cronograma_cuota 
-    WHERE id_prestamo = p_id_prestamo AND estado_cuota != 'Pagada';
-
-    IF p_monto_pago <= 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = "El monto del pagado no es valido.";
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM prestamo WHERE id_prestamo = p_id_prestamo) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El prestamo no existe';
-    END IF;
-
-    INSERT INTO pago (id_prestamo, fecha_pago, monto_pagado, metodo_pago, id_tipo_moneda, creado_por)
-    VALUES (p_id_prestamo, p_fecha_pago, p_monto_pago, p_metodo_pago, p_tipo_moneda, p_creado_por);
-    SET p_id_pago = LAST_INSERT_ID();
-    SET v_monto = p_monto_pago;
-
-    SELECT COUNT(*) INTO v_cuotas_pendientes
-    FROM cronograma_cuota
-    WHERE id_prestamo = p_id_prestamo AND estado_cuota != 'Pagada';
-
-    IF v_cuotas_pendientes = 0 THEN
-        UPDATE prestamo 
-        SET id_estado_prestamo = (SELECT id_estado_prestamo FROM cat_estado_prestamo WHERE estado_prestamo = 'Pagado' LIMIT 1)
-        WHERE id_prestamo = p_id_prestamo;
-    END IF;
-END;
-//
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE generar_cronograma(IN p_id_prestamo INT)
-BEGIN
-    DECLARE v_monto_total DECIMAL(10,2);
-    DECLARE v_plazo INT;
-    DECLARE v_tasa_interes DECIMAL(5,2);
-    DECLARE v_interes_total DECIMAL(10,2);
-    DECLARE v_fecha_inicial DATE;
-    DECLARE v_capital_cuota DECIMAL(10,2);
-    DECLARE v_interes_cuota DECIMAL(10,2);
-    DECLARE v_monto_cuota DECIMAL(10,2);
-    DECLARE v_num_cuotas DECIMAL(10,2);
-    DECLARE i INT DEFAULT 1;
-
-    SELECT monto_solicitado, plazo_meses, tp.tasa_interes
-    INTO v_monto_total, v_plazo, v_tasa_interes
-    FROM prestamo p
-    JOIN tipo_prestamo tp ON p.id_tipo_prestamo = tp.id_tipo_prestamo
-    WHERE p.id_prestamo = p_id_prestamo;
-
-    IF v_monto_total IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Prestamo no encontrado';
-    END IF;
-
-    IF v_plazo IS NULL OR v_plazo <= 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Plazo no válido para el préstamo.';
-    END IF;
-
-    SET v_fecha_inicial = COALESCE(
-        (SELECT fecha_solicitud FROM prestamo 
-        WHERE id_prestamo = p_id_prestamo),
-        CURDATE()
-    );
-
--- calculo de cuotas
-    SET v_interes_total = v_monto_total * (v_tasa_interes / 100) * (v_plazo / 12);
-    SET v_num_cuotas = (v_monto_total + v_interes_total) / v_plazo;
-    SET v_capital_cuota = v_monto_total / v_plazo;
-    SET v_interes_cuota = v_interes_total / v_plazo;
-    SET v_monto_cuota = v_capital_cuota + v_interes_cuota;
-
-    WHILE i <= v_plazo DO
-        INSERT INTO cronograma_cuota (id_prestamo, numero_cuota, fecha_vencimiento, capital_cuota, interes_cuota,cargos_cuota, total_monto, estado_cuota)
-        VALUES (
-            p_id_prestamo,
-            i,
-            DATE_ADD(v_fecha_inicial, INTERVAL i MONTH),
-            ROUND(v_capital_cuota, 2),
-            ROUND(v_interes_cuota, 2),
-            0.00,
-            ROUND(v_monto_cuota, 2),
-            ROUND(v_num_cuotas, 2),
-            ROUND(GREATEST(v_monto_total - (v_capital_cuota * (i-1)), 0), 2),
-            'Pendiente'
-        );
-        SET i = i + 1;
-    END WHILE;
-END;
-//
-DELIMITER ;
-
-
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Servidor: 127.0.0.1:3306
+-- Tiempo de generación: 29-10-2025 a las 22:53:16
+-- Versión del servidor: 9.1.0
+-- Versión de PHP: 8.3.14
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Base de datos: `prestamos_db`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `asignacion_pago`
+--
+
+DROP TABLE IF EXISTS `asignacion_pago`;
+CREATE TABLE IF NOT EXISTS `asignacion_pago` (
+  `id_asignacion_pago` int NOT NULL AUTO_INCREMENT,
+  `id_pago` int DEFAULT NULL,
+  `id_cronograma_cuota` int DEFAULT NULL,
+  `monto_asignado` decimal(10,2) NOT NULL,
+  `tipo_asignacion` enum('Capital','Interes','Cargos') NOT NULL,
+  PRIMARY KEY (`id_asignacion_pago`),
+  KEY `id_pago` (`id_pago`),
+  KEY `id_cronograma_cuota` (`id_cronograma_cuota`)
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `asignacion_pago`
+--
+
+INSERT INTO `asignacion_pago` (`id_asignacion_pago`, `id_pago`, `id_cronograma_cuota`, `monto_asignado`, `tipo_asignacion`) VALUES
+(1, 1, 5, 200.00, 'Interes'),
+(2, 2, 7, 50.00, 'Interes');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_beneficio`
+--
+
+DROP TABLE IF EXISTS `cat_beneficio`;
+CREATE TABLE IF NOT EXISTS `cat_beneficio` (
+  `id_beneficio` int NOT NULL AUTO_INCREMENT,
+  `tipo_beneficio` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_beneficio`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_beneficio`
+--
+
+INSERT INTO `cat_beneficio` (`id_beneficio`, `tipo_beneficio`) VALUES
+(1, 'Seguro médico'),
+(2, 'Bonificación'),
+(3, 'Vacaciones pagadas'),
+(4, 'Seguro médico'),
+(5, 'Bonificación'),
+(6, 'Vacaciones pagadas'),
+(7, 'Seguro médico'),
+(8, 'Bonificación'),
+(9, 'Vacaciones pagadas');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_estado_prestamo`
+--
+
+DROP TABLE IF EXISTS `cat_estado_prestamo`;
+CREATE TABLE IF NOT EXISTS `cat_estado_prestamo` (
+  `id_estado_prestamo` int NOT NULL AUTO_INCREMENT,
+  `estado` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_estado_prestamo`)
+) ENGINE=MyISAM AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_estado_prestamo`
+--
+
+INSERT INTO `cat_estado_prestamo` (`id_estado_prestamo`, `estado`) VALUES
+(1, 'Activo'),
+(2, 'Pendiente'),
+(3, 'Rechazado'),
+(4, 'En mora'),
+(5, 'Pagado'),
+(6, 'Activo'),
+(7, 'Pendiente'),
+(8, 'Rechazado'),
+(9, 'En mora'),
+(10, 'Pagado'),
+(11, 'Activo'),
+(12, 'Pendiente'),
+(13, 'Rechazado'),
+(14, 'En mora'),
+(15, 'Pagado');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_genero`
+--
+
+DROP TABLE IF EXISTS `cat_genero`;
+CREATE TABLE IF NOT EXISTS `cat_genero` (
+  `id_genero` int NOT NULL AUTO_INCREMENT,
+  `genero` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_genero`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_genero`
+--
+
+INSERT INTO `cat_genero` (`id_genero`, `genero`) VALUES
+(1, 'Masculino'),
+(2, 'Femenino'),
+(3, 'Otro'),
+(4, 'Masculino'),
+(5, 'Femenino'),
+(6, 'Otro'),
+(7, 'Masculino'),
+(8, 'Femenino'),
+(9, 'Otro');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_nivel_riesgo`
+--
+
+DROP TABLE IF EXISTS `cat_nivel_riesgo`;
+CREATE TABLE IF NOT EXISTS `cat_nivel_riesgo` (
+  `id_nivel_riesgo` int NOT NULL AUTO_INCREMENT,
+  `nivel` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_nivel_riesgo`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_nivel_riesgo`
+--
+
+INSERT INTO `cat_nivel_riesgo` (`id_nivel_riesgo`, `nivel`) VALUES
+(1, 'Bajo'),
+(2, 'Medio'),
+(3, 'Alto'),
+(4, 'Bajo'),
+(5, 'Medio'),
+(6, 'Alto'),
+(7, 'Bajo'),
+(8, 'Medio'),
+(9, 'Alto');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_periodo_pago`
+--
+
+DROP TABLE IF EXISTS `cat_periodo_pago`;
+CREATE TABLE IF NOT EXISTS `cat_periodo_pago` (
+  `id_periodo_pago` int NOT NULL AUTO_INCREMENT,
+  `periodo` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_periodo_pago`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_periodo_pago`
+--
+
+INSERT INTO `cat_periodo_pago` (`id_periodo_pago`, `periodo`) VALUES
+(1, 'Semanal'),
+(2, 'Quincenal'),
+(3, 'Mensual'),
+(4, 'Semanal'),
+(5, 'Quincenal'),
+(6, 'Mensual'),
+(7, 'Semanal'),
+(8, 'Quincenal'),
+(9, 'Mensual');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_contrato`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_contrato`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_contrato` (
+  `id_tipo_contrato` int NOT NULL AUTO_INCREMENT,
+  `tipo_contrato` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_contrato`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_contrato`
+--
+
+INSERT INTO `cat_tipo_contrato` (`id_tipo_contrato`, `tipo_contrato`) VALUES
+(1, 'Medio tiempo'),
+(2, 'Tiempo completo'),
+(3, 'Pasantia'),
+(4, 'Medio tiempo'),
+(5, 'Tiempo completo'),
+(6, 'Pasantia'),
+(7, 'Medio tiempo'),
+(8, 'Tiempo completo'),
+(9, 'Pasantia');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_deduccion`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_deduccion`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_deduccion` (
+  `id_tipo_deduccion` int NOT NULL AUTO_INCREMENT,
+  `tipo_deduccion` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_deduccion`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_deduccion`
+--
+
+INSERT INTO `cat_tipo_deduccion` (`id_tipo_deduccion`, `tipo_deduccion`) VALUES
+(1, 'ISR'),
+(2, 'AFP'),
+(3, 'SFS'),
+(4, 'ISR'),
+(5, 'AFP'),
+(6, 'SFS'),
+(7, 'ISR'),
+(8, 'AFP'),
+(9, 'SFS');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_documento`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_documento`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_documento` (
+  `id_tipo_documento` int NOT NULL AUTO_INCREMENT,
+  `tipo_documento` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_documento`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_documento`
+--
+
+INSERT INTO `cat_tipo_documento` (`id_tipo_documento`, `tipo_documento`) VALUES
+(1, 'Cedula'),
+(2, 'Pasaporte'),
+(3, 'Licencia de conducir'),
+(4, 'Cedula'),
+(5, 'Pasaporte'),
+(6, 'Licencia de conducir'),
+(7, 'Cedula'),
+(8, 'Pasaporte'),
+(9, 'Licencia de conducir');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_entidad`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_entidad`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_entidad` (
+  `id_tipo_entidad` int NOT NULL AUTO_INCREMENT,
+  `tipo_entidad` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_entidad`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_entidad`
+--
+
+INSERT INTO `cat_tipo_entidad` (`id_tipo_entidad`, `tipo_entidad`) VALUES
+(1, 'Cliente'),
+(2, 'Empleado'),
+(3, 'Propiedad'),
+(4, 'Cliente'),
+(5, 'Empleado'),
+(6, 'Propiedad'),
+(7, 'Cliente'),
+(8, 'Empleado'),
+(9, 'Propiedad');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_moneda`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_moneda`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_moneda` (
+  `id_tipo_moneda` int NOT NULL AUTO_INCREMENT,
+  `tipo_moneda` varchar(50) NOT NULL,
+  `valor` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id_tipo_moneda`)
+) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_moneda`
+--
+
+INSERT INTO `cat_tipo_moneda` (`id_tipo_moneda`, `tipo_moneda`, `valor`) VALUES
+(1, 'DOP', 1.00),
+(2, 'USD', 62.97),
+(3, 'DOP', 1.00),
+(4, 'USD', 62.97),
+(5, 'DOP', 1.00),
+(6, 'USD', 62.97);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_pago`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_pago`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_pago` (
+  `id_tipo_pago` int NOT NULL AUTO_INCREMENT,
+  `tipo_pago` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_pago`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_pago`
+--
+
+INSERT INTO `cat_tipo_pago` (`id_tipo_pago`, `tipo_pago`) VALUES
+(1, 'Efectivo'),
+(2, 'Transferencia'),
+(3, 'Cheque'),
+(4, 'Efectivo'),
+(5, 'Transferencia'),
+(6, 'Cheque'),
+(7, 'Efectivo'),
+(8, 'Transferencia'),
+(9, 'Cheque');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cat_tipo_promocion`
+--
+
+DROP TABLE IF EXISTS `cat_tipo_promocion`;
+CREATE TABLE IF NOT EXISTS `cat_tipo_promocion` (
+  `id_tipo_promocion` int NOT NULL AUTO_INCREMENT,
+  `tipo_promocion` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_tipo_promocion`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cat_tipo_promocion`
+--
+
+INSERT INTO `cat_tipo_promocion` (`id_tipo_promocion`, `tipo_promocion`) VALUES
+(1, 'Descuento'),
+(2, 'Promoción'),
+(3, 'Tasa interes mas baja'),
+(4, 'Descuento'),
+(5, 'Promoción'),
+(6, 'Tasa interes mas baja'),
+(7, 'Descuento'),
+(8, 'Promoción'),
+(9, 'Tasa interes mas baja');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cliente`
+--
+
+DROP TABLE IF EXISTS `cliente`;
+CREATE TABLE IF NOT EXISTS `cliente` (
+  `id_cliente` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  PRIMARY KEY (`id_cliente`),
+  KEY `id_datos_persona` (`id_datos_persona`)
+) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cliente`
+--
+
+INSERT INTO `cliente` (`id_cliente`, `id_datos_persona`) VALUES
+(1, 1),
+(2, 2),
+(3, 3),
+(4, 4),
+(5, 5),
+(6, 6);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `condicion_prestamo`
+--
+
+DROP TABLE IF EXISTS `condicion_prestamo`;
+CREATE TABLE IF NOT EXISTS `condicion_prestamo` (
+  `id_condicion_prestamo` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `tasa_interes` decimal(5,2) NOT NULL,
+  `tipo_interes` varchar(50) NOT NULL,
+  `tipo_amortizacion` varchar(50) NOT NULL,
+  `id_periodo_pago` int DEFAULT NULL,
+  `vigente_desde` date NOT NULL,
+  `vigente_hasta` date DEFAULT NULL,
+  `esta_activo` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`id_condicion_prestamo`),
+  KEY `id_prestamo` (`id_prestamo`),
+  KEY `id_periodo_pago` (`id_periodo_pago`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cronograma_cuota`
+--
+
+DROP TABLE IF EXISTS `cronograma_cuota`;
+CREATE TABLE IF NOT EXISTS `cronograma_cuota` (
+  `id_cronograma_cuota` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `numero_cuota` int NOT NULL,
+  `fecha_vencimiento` date NOT NULL,
+  `capital_cuota` decimal(10,2) NOT NULL,
+  `interes_cuota` decimal(10,2) NOT NULL,
+  `cargos_cuota` decimal(10,2) DEFAULT '0.00',
+  `total_monto` decimal(10,2) NOT NULL,
+  `saldo_pendiente` decimal(10,2) NOT NULL,
+  `estado_cuota` enum('Pendiente','Pagada','Vencida') DEFAULT 'Pendiente',
+  PRIMARY KEY (`id_cronograma_cuota`),
+  KEY `id_prestamo` (`id_prestamo`)
+) ENGINE=MyISAM AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `cronograma_cuota`
+--
+
+INSERT INTO `cronograma_cuota` (`id_cronograma_cuota`, `id_prestamo`, `numero_cuota`, `fecha_vencimiento`, `capital_cuota`, `interes_cuota`, `cargos_cuota`, `total_monto`, `saldo_pendiente`, `estado_cuota`) VALUES
+(1, 1, 1, '2025-10-26', 3000.00, 200.00, 0.00, 3200.00, 3200.00, 'Pendiente'),
+(2, 1, 2, '2025-10-28', 3000.00, 200.00, 0.00, 3200.00, 3200.00, 'Pendiente'),
+(3, 2, 3, '2025-10-15', 7000.00, 500.00, 100.00, 7600.00, 7600.00, 'Vencida'),
+(4, 2, 4, '2025-10-20', 7000.00, 500.00, 100.00, 7600.00, 7600.00, 'Vencida'),
+(5, 3, 5, '2025-10-10', 2500.00, 200.00, 0.00, 2700.00, 0.00, 'Pagada'),
+(6, 4, 1, '2025-11-05', 900.00, 100.00, 0.00, 1000.00, 1000.00, 'Pendiente'),
+(7, 5, 8, '2025-09-30', 450.00, 50.00, 0.00, 500.00, 0.00, 'Pagada');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `datos_persona`
+--
+
+DROP TABLE IF EXISTS `datos_persona`;
+CREATE TABLE IF NOT EXISTS `datos_persona` (
+  `id_datos_persona` int NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(100) NOT NULL,
+  `apellido` varchar(100) NOT NULL,
+  `fecha_nacimiento` date NOT NULL,
+  `genero` int DEFAULT NULL,
+  `estado_cliente` enum('Activo','Inactivo') DEFAULT 'Activo',
+  `creado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `actualizado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_datos_persona`),
+  KEY `genero` (`genero`)
+) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `datos_persona`
+--
+
+INSERT INTO `datos_persona` (`id_datos_persona`, `nombre`, `apellido`, `fecha_nacimiento`, `genero`, `estado_cliente`, `creado_en`, `actualizado_en`) VALUES
+(1, 'Juan', 'Pérez', '1985-04-10', 1, 'Activo', '2025-09-15 14:00:00', '2025-10-27 00:13:54'),
+(2, 'María', 'Gómez', '1990-07-02', 2, 'Activo', '2025-07-10 13:30:00', '2025-10-27 00:13:54'),
+(3, 'Carlos', 'Ruiz', '1982-12-01', 1, 'Activo', '2025-05-03 15:00:00', '2025-10-27 00:13:54'),
+(4, 'Ana', 'Torres', '1995-03-14', 2, 'Activo', '2025-03-14 18:00:00', '2025-10-27 00:13:54'),
+(5, 'Luis', 'Fernández', '1978-01-22', 1, 'Activo', '2025-01-10 20:30:00', '2025-10-27 00:13:54'),
+(6, 'Sofía', 'Martínez', '1999-11-30', 2, 'Activo', '2025-10-25 13:00:00', '2025-10-27 00:13:54');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `desembolso`
+--
+
+DROP TABLE IF EXISTS `desembolso`;
+CREATE TABLE IF NOT EXISTS `desembolso` (
+  `id_desembolso` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `monto_desembolsado` decimal(10,2) NOT NULL,
+  `fecha_desembolso` date NOT NULL,
+  `metodo_entrega` int DEFAULT NULL,
+  PRIMARY KEY (`id_desembolso`),
+  KEY `id_prestamo` (`id_prestamo`),
+  KEY `metodo_entrega` (`metodo_entrega`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `detalle_evaluacion`
+--
+
+DROP TABLE IF EXISTS `detalle_evaluacion`;
+CREATE TABLE IF NOT EXISTS `detalle_evaluacion` (
+  `id_detalle_evaluacion` int NOT NULL AUTO_INCREMENT,
+  `id_evaluacion_prestamo` int DEFAULT NULL,
+  `fecha` date NOT NULL,
+  `observacion` text NOT NULL,
+  `evaluado_por` int DEFAULT NULL,
+  PRIMARY KEY (`id_detalle_evaluacion`),
+  KEY `id_evaluacion_prestamo` (`id_evaluacion_prestamo`),
+  KEY `evaluado_por` (`evaluado_por`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `direccion`
+--
+
+DROP TABLE IF EXISTS `direccion`;
+CREATE TABLE IF NOT EXISTS `direccion` (
+  `id_direccion` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  `ciudad` varchar(100) NOT NULL,
+  `sector` varchar(100) NOT NULL,
+  `calle` varchar(100) NOT NULL,
+  `numero_casa` int NOT NULL,
+  `es_principal` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`id_direccion`),
+  KEY `id_datos_persona` (`id_datos_persona`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `direccion_entidad`
+--
+
+DROP TABLE IF EXISTS `direccion_entidad`;
+CREATE TABLE IF NOT EXISTS `direccion_entidad` (
+  `id_direccion_entidad` int NOT NULL AUTO_INCREMENT,
+  `id_direccion` int DEFAULT NULL,
+  `id_tipo_entidad` int DEFAULT NULL,
+  `tipo_direccion` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_direccion_entidad`),
+  KEY `id_direccion` (`id_direccion`),
+  KEY `id_tipo_entidad` (`id_tipo_entidad`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `documentacion_cliente`
+--
+
+DROP TABLE IF EXISTS `documentacion_cliente`;
+CREATE TABLE IF NOT EXISTS `documentacion_cliente` (
+  `id_documentacion_cliente` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `id_tipo_documento` int DEFAULT NULL,
+  `ruta_documento` varchar(255) NOT NULL,
+  PRIMARY KEY (`id_documentacion_cliente`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_tipo_documento` (`id_tipo_documento`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `documento_identidad`
+--
+
+DROP TABLE IF EXISTS `documento_identidad`;
+CREATE TABLE IF NOT EXISTS `documento_identidad` (
+  `id_documento_identidad` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  `id_tipo_documento` int DEFAULT NULL,
+  `numero_documento` varchar(50) NOT NULL,
+  `fecha_emision` date NOT NULL,
+  PRIMARY KEY (`id_documento_identidad`),
+  UNIQUE KEY `numero_documento` (`numero_documento`),
+  KEY `id_datos_persona` (`id_datos_persona`),
+  KEY `id_tipo_documento` (`id_tipo_documento`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `email`
+--
+
+DROP TABLE IF EXISTS `email`;
+CREATE TABLE IF NOT EXISTS `email` (
+  `id_email` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  `email` varchar(100) NOT NULL,
+  `es_principal` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`id_email`),
+  KEY `id_datos_persona` (`id_datos_persona`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `evaluacion_prestamo`
+--
+
+DROP TABLE IF EXISTS `evaluacion_prestamo`;
+CREATE TABLE IF NOT EXISTS `evaluacion_prestamo` (
+  `id_evaluacion_prestamo` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `id_prestamo` int DEFAULT NULL,
+  `capacidad_pago` decimal(10,2) NOT NULL,
+  `nivel_riesgo` int DEFAULT NULL,
+  `estado_evaluacion` enum('Aprobado','Rechazado','Pendiente') NOT NULL,
+  `fecha_evaluacion` date NOT NULL,
+  PRIMARY KEY (`id_evaluacion_prestamo`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_prestamo` (`id_prestamo`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `fondos`
+--
+
+DROP TABLE IF EXISTS `fondos`;
+CREATE TABLE IF NOT EXISTS `fondos` (
+  `id_fondo` int NOT NULL AUTO_INCREMENT,
+  `cartera_normal` decimal(15,2) NOT NULL,
+  `cartera_vencida` decimal(15,2) NOT NULL,
+  `total_fondos` decimal(15,2) NOT NULL,
+  `actualizacion` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_fondo`)
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `fondos`
+--
+
+INSERT INTO `fondos` (`id_fondo`, `cartera_normal`, `cartera_vencida`, `total_fondos`, `actualizacion`) VALUES
+(1, 50000.00, 8000.00, 58000.00, '2025-10-27 00:13:54');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `fuente_ingreso`
+--
+
+DROP TABLE IF EXISTS `fuente_ingreso`;
+CREATE TABLE IF NOT EXISTS `fuente_ingreso` (
+  `id_fuente_ingreso` int NOT NULL AUTO_INCREMENT,
+  `id_ingresos_egresos` int DEFAULT NULL,
+  `fuente` varchar(100) NOT NULL,
+  `monto` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id_fuente_ingreso`),
+  KEY `id_ingresos_egresos` (`id_ingresos_egresos`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `garantia`
+--
+
+DROP TABLE IF EXISTS `garantia`;
+CREATE TABLE IF NOT EXISTS `garantia` (
+  `id_garantia` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `descripcion` varchar(255) NOT NULL,
+  `valor` decimal(10,2) NOT NULL,
+  `id_cliente` int DEFAULT NULL,
+  PRIMARY KEY (`id_garantia`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_prestamo` (`id_prestamo`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ingresos_egresos`
+--
+
+DROP TABLE IF EXISTS `ingresos_egresos`;
+CREATE TABLE IF NOT EXISTS `ingresos_egresos` (
+  `id_ingresos_egresos` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `ingresos_mensuales` decimal(10,2) NOT NULL,
+  `egresos_mensuales` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id_ingresos_egresos`),
+  KEY `id_cliente` (`id_cliente`)
+) ;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ocupacion`
+--
+
+DROP TABLE IF EXISTS `ocupacion`;
+CREATE TABLE IF NOT EXISTS `ocupacion` (
+  `id_ocupacion` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  `ocupacion` varchar(100) NOT NULL,
+  `empresa` varchar(100) NOT NULL,
+  PRIMARY KEY (`id_ocupacion`),
+  KEY `id_datos_persona` (`id_datos_persona`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `pago`
+--
+
+DROP TABLE IF EXISTS `pago`;
+CREATE TABLE IF NOT EXISTS `pago` (
+  `id_pago` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int NOT NULL,
+  `fecha_pago` date NOT NULL,
+  `monto_pagado` decimal(10,2) NOT NULL,
+  `metodo_pago` int DEFAULT NULL,
+  `id_tipo_moneda` int DEFAULT NULL,
+  `creado_por` int DEFAULT NULL,
+  `creado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_pago`),
+  KEY `fk_pago_prestamo` (`id_prestamo`),
+  KEY `fk_pago_tipopago` (`metodo_pago`),
+  KEY `fk_pago_moneda` (`id_tipo_moneda`),
+  KEY `fk_pago_usuario` (`creado_por`)
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `pago`
+--
+
+INSERT INTO `pago` (`id_pago`, `id_prestamo`, `fecha_pago`, `monto_pagado`, `metodo_pago`, `id_tipo_moneda`, `creado_por`, `creado_en`) VALUES
+(1, 3, '2025-10-10', 2700.00, 1, 1, 1, '2025-10-27 00:13:54'),
+(2, 5, '2025-09-30', 500.00, 2, 1, 1, '2025-10-27 00:13:54');
+
+--
+-- Disparadores `pago`
+--
+DROP TRIGGER IF EXISTS `trg_pago_fecha`;
 DELIMITER $$
-
-CREATE TRIGGER validar_capacidad_pago
-BEFORE INSERT ON prestamo
-FOR EACH ROW 
-BEGIN
-    DECLARE v_ingresos DECIMAL(20,2) DEFAULT 0.00;
-    DECLARE v_egresos DECIMAL(20,2) DEFAULT 0.00;
-    DECLARE v_capacidad_pago DECIMAL(20,2);
-    DECLARE v_cuota_estimada DECIMAL(20,2);
-    DECLARE v_tasa_interes DECIMAL(5,2) DEFAULT 0.00;
-
-    SELECT ingresos_mensuales, egresos_mensuales INTO v_ingresos, v_egresos
-    FROM ingresos_egresos
-    WHERE id_cliente = NEW.id_cliente
-    LIMIT 1;
-
-    IF v_ingresos IS NOT NULL THEN
-        SET v_capacidad_pago = v_ingresos - v_egresos;
-        IF v_capacidad_pago <= 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Capacidad de pago insuficiente ';
-        END IF;
-
-        SELECT tasa_interes INTO v_tasa_interes 
-        FROM tipo_prestamo 
-        WHERE id_tipo_prestamo = NEW.id_tipo_prestamo 
-        LIMIT 1;
-
-        IF v_tasa_interes IS NULL THEN SET v_tasa_interes = 0;
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Interes nulo';
-        END IF;
-
-        SET v_cuota_estimada = (NEW.monto_solicitado * (1 + (v_tasa_interes/100) * (NEW.plazo_meses/12))) / NEW.plazo_meses;
-
-        IF v_cuota_estimada / v_capacidad_pago > 0.4 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuota estimada excede el 40% de la capacidad de pago.';
-        END IF;
-    END IF;
-END$$
+CREATE TRIGGER `trg_pago_fecha` BEFORE INSERT ON `pago` FOR EACH ROW BEGIN
+  IF NEW.fecha_pago > CURRENT_DATE() THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'fecha_pago no puede ser futura';
+  END IF;
+END
+$$
 DELIMITER ;
-
+DROP TRIGGER IF EXISTS `trg_pago_fecha_upd`;
 DELIMITER $$
-
-CREATE TRIGGER actualizar_estado_prestamo
-AFTER UPDATE ON cronograma_cuota 
-FOR EACH ROW 
-BEGIN 
-    DECLARE v_total_pendientes INT DEFAULT 0;
-    DECLARE v_total_vencidas INT DEFAULT 0;
-    DECLARE v_id_prestamo INT;
-    SET v_id_prestamo = NEW.id_prestamo;
-
-    SELECT COUNT(*) INTO v_total_pendientes FROM cronograma_cuota WHERE id_prestamo = v_id_prestamo AND estado_cuota = 'Pendiente';
-    SELECT COUNT(*) INTO v_total_vencidas FROM cronograma_cuota WHERE id_prestamo = v_id_prestamo AND estado_cuota = 'Vencida';
-
-    IF v_total_pendientes = 0 AND v_total_vencidas = 0 THEN
-        UPDATE prestamo SET estado_prestamo = 5 WHERE id_prestamo = v_id_prestamo;
-    ELSE
-        UPDATE prestamo SET estado_prestamo = 1 WHERE id_prestamo = v_id_prestamo;
-    END IF;
-END$$
+CREATE TRIGGER `trg_pago_fecha_upd` BEFORE UPDATE ON `pago` FOR EACH ROW BEGIN
+  IF NEW.fecha_pago > CURRENT_DATE() THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'fecha_pago no puede ser futura (update)';
+  END IF;
+END
+$$
 DELIMITER ;
 
-DELIMITER $$
-CREATE TRIGGER auditoria_cambios
-AFTER UPDATE ON prestamo 
-FOR EACH ROW 
-BEGIN
-    INSERT INTO auditoria_cambios(
-        tabla_afectada, id_registro, tipo_cambio, fecha_cambio, realizado_por, valores_anteriores, valores_nuevos
-    ) VALUES (
-        'prestamo',
-        OLD.id_prestamo,
-        'UPDATE',
-        NOW(),
-        COALESCE(NEW.creado_por, OLD.creado_por),
-        JSON_OBJECT(
-            'monto_solicitado', OLD.monto_solicitado,
-            'plazo_meses', OLD.plazo_meses,
-            'id_estado_prestamo', OLD.id_estado_prestamo
-        ),
-        JSON_OBJECT(
-            'monto_solicitado', NEW.monto_solicitado,
-            'plazo_meses', NEW.plazo_meses,
-            'id_estado_prestamo', NEW.id_estado_prestamo
-        )
-    );
-END$$
-DELIMITER ;
+-- --------------------------------------------------------
 
-DELIMITER $$
+--
+-- Estructura de tabla para la tabla `plantilla_notificacion`
+--
 
-CREATE TRIGGER actualizacion_prestamo_protegido
-BEFORE UPDATE ON prestamo
-FOR EACH ROW 
-BEGIN 
-    DECLARE v_estado INT;
-    SET v_estado = OLD.id_estado_prestamo;
-    IF v_estado IN (4,5) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se puede modificar un préstamo en estado En mora o Pagado.';
-    END IF;
-END$$
-DELIMITER ;
+DROP TABLE IF EXISTS `plantilla_notificacion`;
+CREATE TABLE IF NOT EXISTS `plantilla_notificacion` (
+  `id_plantilla_notificacion` int NOT NULL AUTO_INCREMENT,
+  `tipo_notificacion` varchar(100) NOT NULL,
+  `asunto` varchar(150) NOT NULL,
+  `cuerpo` text NOT NULL,
+  `creado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_plantilla_notificacion`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `prestamo`
+--
+
+DROP TABLE IF EXISTS `prestamo`;
+CREATE TABLE IF NOT EXISTS `prestamo` (
+  `id_prestamo` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `id_tipo_prestamo` int DEFAULT NULL,
+  `monto_solicitado` decimal(10,2) NOT NULL,
+  `fecha_solicitud` date NOT NULL,
+  `fecha_otrogamiento` date DEFAULT NULL,
+  `plazo_meses` int NOT NULL,
+  `id_estado_prestamo` int DEFAULT NULL,
+  `id_condicion_actual` int DEFAULT NULL,
+  `creado_por` int DEFAULT NULL,
+  `creado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `actualizado_en` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_prestamo`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_tipo_prestamo` (`id_tipo_prestamo`),
+  KEY `id_estado_prestamo` (`id_estado_prestamo`),
+  KEY `creado_por` (`creado_por`),
+  KEY `fk_prestamo_condicion` (`id_condicion_actual`)
+) ;
+
+--
+-- Volcado de datos para la tabla `prestamo`
+--
+
+INSERT INTO `prestamo` (`id_prestamo`, `id_cliente`, `id_tipo_prestamo`, `monto_solicitado`, `fecha_solicitud`, `fecha_otrogamiento`, `plazo_meses`, `id_estado_prestamo`, `id_condicion_actual`, `creado_por`, `creado_en`, `actualizado_en`) VALUES
+(1, 1, 1, 5000.00, '2025-09-20', '2025-09-21', 12, 1, NULL, 1, '2025-09-21 13:00:00', '2025-10-01 14:00:00'),
+(2, 2, 1, 8000.00, '2025-07-12', '2025-07-12', 10, 4, NULL, 1, '2025-07-12 14:00:00', '2025-10-20 14:00:00'),
+(3, 3, 1, 3000.00, '2025-06-01', '2025-06-02', 6, 1, NULL, 1, '2025-06-02 13:00:00', '2025-10-10 14:00:00'),
+(4, 4, 2, 15000.00, '2025-09-01', '2025-09-02', 24, 1, NULL, 1, '2025-09-02 13:00:00', '2025-10-01 14:00:00'),
+(5, 5, 1, 4000.00, '2025-02-01', '2025-02-01', 8, 5, NULL, 1, '2025-02-01 13:00:00', '2025-09-30 22:00:00'),
+(6, 6, 1, 2500.00, '2025-10-25', NULL, 12, 2, NULL, 1, '2025-10-25 13:30:00', '2025-10-25 13:30:00');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `prestamos_hipotecario`
+--
+
+DROP TABLE IF EXISTS `prestamos_hipotecario`;
+CREATE TABLE IF NOT EXISTS `prestamos_hipotecario` (
+  `id_prestamo_hipotecario` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `valor_propiedad` decimal(10,2) NOT NULL,
+  `porcentaje_financiamiento` decimal(5,2) NOT NULL,
+  `direccion_propiedad` varchar(255) NOT NULL,
+  PRIMARY KEY (`id_prestamo_hipotecario`),
+  KEY `id_prestamo` (`id_prestamo`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `prestamo_propiedad`
+--
+
+DROP TABLE IF EXISTS `prestamo_propiedad`;
+CREATE TABLE IF NOT EXISTS `prestamo_propiedad` (
+  `id_prestamo_propiedad` int NOT NULL AUTO_INCREMENT,
+  `id_prestamo` int DEFAULT NULL,
+  `id_propiedad` int DEFAULT NULL,
+  `porcentaje_garantia` decimal(5,2) NOT NULL,
+  PRIMARY KEY (`id_prestamo_propiedad`),
+  KEY `id_prestamo` (`id_prestamo`),
+  KEY `id_propiedad` (`id_propiedad`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `propiedades`
+--
+
+DROP TABLE IF EXISTS `propiedades`;
+CREATE TABLE IF NOT EXISTS `propiedades` (
+  `id_propiedad` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `id_direccion` int DEFAULT NULL,
+  `area_m2` decimal(10,2) NOT NULL,
+  `valor_propiedad` decimal(10,2) NOT NULL,
+  `fecha_registro` date NOT NULL,
+  PRIMARY KEY (`id_propiedad`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_direccion` (`id_direccion`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `puntaje_crediticio`
+--
+
+DROP TABLE IF EXISTS `puntaje_crediticio`;
+CREATE TABLE IF NOT EXISTS `puntaje_crediticio` (
+  `id_puntaje_crediciticio` int NOT NULL AUTO_INCREMENT,
+  `id_cliente` int DEFAULT NULL,
+  `id_nivel_riesgo` int DEFAULT NULL,
+  `puntaje` int DEFAULT '0',
+  `total_transacciones` int NOT NULL,
+  PRIMARY KEY (`id_puntaje_crediciticio`),
+  KEY `id_cliente` (`id_cliente`),
+  KEY `id_nivel_riesgo` (`id_nivel_riesgo`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `retiro_garantia`
+--
+
+DROP TABLE IF EXISTS `retiro_garantia`;
+CREATE TABLE IF NOT EXISTS `retiro_garantia` (
+  `id_retiro_garantia` int NOT NULL AUTO_INCREMENT,
+  `id_pago` int DEFAULT NULL,
+  `id_garantia` int DEFAULT NULL,
+  `fecha_uso` date NOT NULL,
+  `monto_usado` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id_retiro_garantia`),
+  KEY `id_pago` (`id_pago`),
+  KEY `id_garantia` (`id_garantia`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `telefono`
+--
+
+DROP TABLE IF EXISTS `telefono`;
+CREATE TABLE IF NOT EXISTS `telefono` (
+  `id_telefono` int NOT NULL AUTO_INCREMENT,
+  `id_datos_persona` int DEFAULT NULL,
+  `telefono` varchar(20) NOT NULL,
+  `es_principal` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`id_telefono`),
+  KEY `id_datos_persona` (`id_datos_persona`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `tipo_prestamo`
+--
+
+DROP TABLE IF EXISTS `tipo_prestamo`;
+CREATE TABLE IF NOT EXISTS `tipo_prestamo` (
+  `id_tipo_prestamo` int NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(100) NOT NULL,
+  `tasa_interes` decimal(5,2) NOT NULL,
+  `monto_minimo` decimal(10,2) NOT NULL,
+  `tipo_amortizacion` varchar(50) NOT NULL,
+  `plazo_minimo_meses` int NOT NULL,
+  `plazo_maximo_meses` int NOT NULL,
+  PRIMARY KEY (`id_tipo_prestamo`)
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `tipo_prestamo`
+--
+
+INSERT INTO `tipo_prestamo` (`id_tipo_prestamo`, `nombre`, `tasa_interes`, `monto_minimo`, `tipo_amortizacion`, `plazo_minimo_meses`, `plazo_maximo_meses`) VALUES
+(1, 'Personal', 10.00, 1000.00, 'Frances', 6, 24),
+(2, 'Comercial', 8.50, 5000.00, 'Frances', 12, 36);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `usuario`
+--
+
+DROP TABLE IF EXISTS `usuario`;
+CREATE TABLE IF NOT EXISTS `usuario` (
+  `id_usuario` int NOT NULL AUTO_INCREMENT,
+  `nombre_usuario` varchar(50) DEFAULT NULL,
+  `contrasena` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id_usuario`)
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `usuario`
+--
+
+INSERT INTO `usuario` (`id_usuario`, `nombre_usuario`, `contrasena`) VALUES
+(1, 'admin', 'admin123');
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

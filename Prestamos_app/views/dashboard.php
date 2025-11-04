@@ -31,6 +31,9 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
 
 <div class="app-shell">
 
+  <!-- 
+     SIDEBAR 
+   -->
   <aside class="sidebar sidebar-expanded">
     <div class="sidebar-inner">
 
@@ -74,11 +77,12 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
         </a>
 
         <a class="nav-link"
-           href="<?= $APP_BASE ?>views/reestructuracion.php">
+           href="<?= $APP_BASE ?>views/restructuracion.php">
           <span class="nav-icon">♻️</span>
           <span class="nav-text">Reestructuración de Préstamos</span>
         </a>
       </div>
+
 
       <!-- ADMINISTRACIÓN -->
       <div class="sidebar-section">

@@ -34,39 +34,100 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
     
   <aside class="sidebar sidebar-expanded">
     <div class="sidebar-inner">
+
+      <!-- DASHBOARD -->
       <div class="sidebar-section">
         <div class="section-label">DASHBOARD</div>
-        <a class="nav-link" href="index.php"><span class="nav-icon">🏠</span><span class="nav-text">Dashboard</span></a>
+
+        <a class="nav-link active"
+           href="<?= $APP_BASE ?>index.php">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-text">Dashboard</span>
+        </a>
       </div>
 
+      <!-- GESTIÓN -->
       <div class="sidebar-section">
         <div class="section-label">GESTIÓN</div>
-        <a class="nav-link active" href="views/clientes.php"><span class="nav-icon">👥</span><span class="nav-text">Gestión de Clientes</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/prestamos.php"><span class="nav-icon">💼</span><span class="nav-text">Control de Préstamos</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/pagos.php"><span class="nav-icon">💰</span><span class="nav-text">Gestión de Pagos</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/seguimiento.php"><span class="nav-icon">📈</span><span class="nav-text">Seguimiento de Préstamos</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/reestructuracion.php"><span class="nav-icon">♻️</span><span class="nav-text">Reestructuración de Préstamos</span></a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/clientes.php">
+          <span class="nav-icon">👥</span>
+          <span class="nav-text">Gestión de Clientes</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/prestamos.php">
+          <span class="nav-icon">💼</span>
+          <span class="nav-text">Control de Préstamos</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/pagos.php">
+          <span class="nav-icon">💰</span>
+          <span class="nav-text">Gestión de Pagos</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/seguimiento.php">
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">Seguimiento de Préstamos</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/reestructuracion.php">
+          <span class="nav-icon">♻️</span>
+          <span class="nav-text">Reestructuración de Préstamos</span>
+        </a>
       </div>
 
+
+      <!-- ADMINISTRACIÓN -->
       <div class="sidebar-section">
         <div class="section-label">ADMINISTRACIÓN</div>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/seguridad.php"><span class="nav-icon">🔐</span><span class="nav-text">Usuarios y Roles</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/rrhh.php"><span class="nav-icon">🧑</span><span class="nav-text">Recursos Humanos</span></a>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/agenda.php"><span class="nav-icon">📅</span><span class="nav-text">Agenda y Citas</span></a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/seguridad.php">
+          <span class="nav-icon">🔐</span>
+          <span class="nav-text">Usuarios y Roles</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/rrhh.php">
+          <span class="nav-icon">🧑</span>
+          <span class="nav-text">Recursos Humanos</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>views/agenda.php">
+          <span class="nav-icon">📅</span>
+          <span class="nav-text">Agenda y Citas</span>
+        </a>
+
+        <a class="nav-link"
+           href="<?= $APP_BASE ?>logout.php">
+          <span class="nav-icon">🚪</span>
+          <span class="nav-text">Cerrar Sesión</span>
+        </a>
       </div>
-    </div>
+
+    </div><!-- /sidebar-inner -->
+
     <div class="sidebar-footer">
-      <a class="nav-link footer-link" href="<?= $APP_BASE ?>logout.php"><span class="nav-icon">🚪</span><span class="nav-text">Cerrar Sesión</span></a>
+      <a class="nav-link footer-link"
+         href="<?= $APP_BASE ?>views/perfil.php">
+        <span class="nav-icon">👤</span>
+        <span class="nav-text">Mi Perfil</span>
+      </a>
     </div>
   </aside>
 
     <!-- CONTENIDO -->
     <div class="content-area">
-      <header class="topbar">
-        <div class="topbar-left">
-          <a class="home-btn" href="index.php" title="Volver al Dashboard">🏠</a>
-          <div class="brand">
-            <span class="brand-logo">👥</span>
+      <header class="topbar topbar-light">
+      <div class="topbar-left">
+        <div class="brand-inline">
+          <span class="brand-logo">👥</span>
             <span class="brand-text">Gestión de Clientes</span>
           </div>
         </div>
@@ -118,9 +179,9 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
 
         <div class="grid-2">
           <div>
-            <label>Nombre *</label><input id="nombre" name="nombre" class="input" required placeholder="Nombre">
-            <label>Apellido *</label><input id="apellido" name="apellido" class="input" required placeholder="Apellido">
-            <label>Fecha de nacimiento *</label><input id="fecha_nacimiento" name="fecha_nacimiento" type="date" class="input" required> 
+            <label>Nombre *</label><input id="nombre" name="nombre" class="input" required>
+            <label>Apellido *</label><input id="apellido" name="apellido" class="input" required>
+            <label>Fecha de nacimiento *</label><input id="fecha_nacimiento" name="fecha_nacimiento" type="date" class="input" required>
             <label>Género *</label>
             <select id="genero" name="genero" class="input" required>
               <option value="">Seleccione…</option>
@@ -135,26 +196,26 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
               <option value="2">Pasaporte</option>
               <option value="3">Licencia de conducir</option>
             </select>
-            <label>Número documento *</label><input id="numero_documento" name="numero_documento" class="input" required placeholder="001-1234567-8">
+            <label>Número documento *</label><input id="numero_documento" name="numero_documento" class="input" required>
           </div>
 
           <div>
-            <label>Teléfono *</label><input id="telefono" name="telefono" class="input" required placeholder="829-000-0000">
-            <label>Email *</label><input id="email" name="email" type="email" class="input" required placeholder="Ejemplo: algo@gmail.com">
+            <label>Teléfono *</label><input id="telefono" name="telefono" class="input" required>
+            <label>Email *</label><input id="email" name="email" type="email" class="input" required>
             <label>Dirección:</label>
            <div> </div>
-            <label>Ciudad *</label><input id="ciudad" name="ciudad" class="input" required placeholder="Ciudad">
-            <label>Sector *</label><input id="sector" name="sector" class="input" required placeholder="Barrio o urbanización">
-            <label>Calle *</label><input id="calle" name="calle" class="input" required placeholder="Av. Siempre Viva">
-            <label>Número casa *</label><input id="numero_casa" name="numero_casa" class="input" required placeholder="25">
+            <label>Ciudad *</label><input id="ciudad" name="ciudad" class="input" required>
+            <label>Sector *</label><input id="sector" name="sector" class="input" required>
+            <label>Calle *</label><input id="calle" name="calle" class="input" required>
+            <label>Número casa *</label><input id="numero_casa" name="numero_casa" class="input" required>
           </div>
 
           <div>
-            <label>Ingresos mensuales *</label><input id="ingresos_mensuales" name="ingresos_mensuales" class="input" required placeholder='0.00'>
-            <label>Fuente de ingresos *</label><input id="fuente_ingresos" name="fuente_ingresos" class="input" required placeholder="Ejemplo: Salario, Negocio, etc.">
-            <label>Egresos mensuales *</label><input id="egresos_mensuales" name="egresos_mensuales" class="input" required placeholder='0.00'>
-            <label>Ocupación *</label><input id="ocupacion" name="ocupacion" class="input" required placeholder="Ejemplo: Empleado, Autónomo, etc.">
-            <label>Empresa *</label><input id="empresa" name="empresa" class="input" required placeholder="Nombre de la empresa ">
+            <label>Ingresos mensuales *</label><input id="ingresos_mensuales" name="ingresos_mensuales" class="input" required>
+            <label>Fuente de ingresos *</label><input id="fuente_ingresos" name="fuente_ingresos" class="input" required>
+            <label>Egresos mensuales *</label><input id="egresos_mensuales" name="egresos_mensuales" class="input" required>
+            <label>Ocupación *</label><input id="ocupacion" name="ocupacion" class="input" required>
+            <label>Empresa *</label><input id="empresa" name="empresa" class="input" required>
           </div>
         </div>
 

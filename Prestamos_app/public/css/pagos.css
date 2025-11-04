@@ -1,0 +1,3 @@
+/* assets/pagos.css */
+#panelResumen .card-body p, #panelResumen .card-body li { margin: 4px 0; }
+#tablaResultados tbody tr:hover td { background: #f8fafc; }
