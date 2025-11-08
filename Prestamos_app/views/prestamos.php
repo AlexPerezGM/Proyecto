@@ -19,25 +19,9 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="<?= $BASE ?>public/css/dashboard.css">
   <link rel="stylesheet" href="<?= $BASE ?>public/css/clientes.css">
-  <style>
-    /* Ajustes mínimos específicos del módulo (reusa paleta de dashboard.css) */
-    .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
-    .tabs .btn { background:#111827; }
-    .tabs .btn.outline { background:#fff; color:#111827; border:1px solid var(--border-soft); }
-    .hidden { display:none !important; }
-    .panel { background:#fff; border:1px solid var(--border-soft); border-radius:14px; box-shadow: var(--shadow); padding:16px; }
-    .titulo-seccion { font-weight:800; margin:0 0 8px; }
-    .info-grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
-    @media (max-width: 860px){ .info-grid { grid-template-columns: 1fr; } }
-    .mini { font-size:.85rem; color:var(--text-dim); }
-    .table-simple td small { color:var(--text-dim); display:block; }
-    .pill { display:inline-block; padding:4px 8px; border-radius:999px; font-size:.75rem; border:1px solid var(--border-soft); background:#f9fafb; }
-    .toolbar-end { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .inline-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .w-160{ width:160px; } .w-120{ width:120px; }
-  </style>
 </head>
 <body>
+  
 <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">

@@ -1,11 +1,15 @@
 <?php
 // views/restructuracion.php
 require_once __DIR__ . '/../config/db.php';
+$BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$BASE = preg_replace('#/views$#','', $BASE);
+$BASE = ($BASE === '' ? '/' : $BASE . '/');
 
 // Base de la app para URLs absolutas tipo /Prestamos_app/
 $APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $APP_BASE = preg_replace('#/views$#','', $APP_BASE);
 $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
+
 ?>
 <!doctype html>
 <html lang="es">
@@ -18,62 +22,100 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
   <!-- CSS base del dashboard y clientes (reuso de clases/estética) -->
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/dashboard.css">
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/clientes.css">
-  <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/prestamos.css"><!-- si ya existe -->
-
-  <style>
-    /* Ajustes mínimos específicos */
-    .grid-page { display:grid; grid-template-columns: 1fr; gap:16px; }
-    .panel { background:#fff; border:1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow); }
-    .panel .panel-header { padding:12px 16px; border-bottom:1px solid var(--border-soft); background:#f9fafb; font-weight:700;}
-    .panel .panel-body { padding:16px; }
-    .table-simple td, .table-simple th { white-space: nowrap; }
-    .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#e0e7ff; color:#4338ca; font-size:.72rem; }
-  </style>
+  <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/prestamos.css">
+  <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/reestructuracon.css">
 </head>
 <body>
 <div class="app-shell">
   <!-- ===== Sidebar (mismo markup) ===== -->
+  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
-    <div class="sidebar-inner">
+  <div class="sidebar-inner">
 
-      <div class="sidebar-section">
-        <div class="section-label">DASHBOARD</div>
-        <a class="nav-link" href="<?= $APP_BASE ?>index.php">
-          <span class="nav-icon">🏠</span><span class="nav-text">Dashboard</span>
-        </a>
-      </div>
+    <!-- DASHBOARD -->
+    <div class="sidebar-section">
+      <div class="section-label">DASHBOARD</div>
 
-      <div class="sidebar-section">
-        <div class="section-label">GESTIÓN</div>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/clientes.php">
-          <span class="nav-icon">👥</span>
-          <span class="nav-text">Gestión de Clientes</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/prestamos.php">
-          <span class="nav-icon">📄</span>
-          <span class="nav-text">Control de Préstamos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/pagos.php">
-          <span class="nav-icon">💳</span>
-          <span class="nav-text">Gestión de Pagos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/seguimiento.php">
-          <span class="nav-icon">🧭</span>
-          <span class="nav-text">Seguimiento</span>
-        </a>
-
-        <a class="nav-link active" href="<?= $APP_BASE ?>views/reestructuracion.php">
-          <span class="nav-icon">🛠️</span>
-          <span class="nav-text">Reestructuración</span>
-        </a>
-      </div>
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>index.php">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-text">Dashboard</span>
+      </a>
     </div>
-  </aside>
 
+    <!-- GESTIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">GESTIÓN</div>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/clientes.php">
+        <span class="nav-icon">👥</span>
+        <span class="nav-text">Gestión de Clientes</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/prestamos.php">
+        <span class="nav-icon">💼</span>
+        <span class="nav-text">Control de Préstamos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/pagos.php">
+        <span class="nav-icon">💰</span>
+        <span class="nav-text">Gestión de Pagos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/seguimiento.php">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Seguimiento de Préstamos</span>
+      </a>
+
+      <a class="nav-link active"
+         href="<?= $APP_BASE ?>views/reestructuracion.php">
+        <span class="nav-icon">♻️</span>
+        <span class="nav-text">Reestructuración de Préstamos</span>
+      </a>
+    </div>
+
+    <!-- ADMINISTRACIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">ADMINISTRACIÓN</div>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/seguridad.php">
+        <span class="nav-icon">🔐</span>
+        <span class="nav-text">Usuarios y Roles</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/rrhh.php">
+        <span class="nav-icon">🧑</span>
+        <span class="nav-text">Recursos Humanos</span>
+      </a>
+
+      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
+        <span class="nav-icon">📅</span>
+        <span class="nav-text">Campañas de promoción</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>logout.php">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-text">Cerrar Sesión</span>
+      </a>
+    </div>
+
+  </div><!-- /sidebar-inner -->
+
+  <div class="sidebar-footer">
+    <a class="nav-link footer-link"
+       href="<?= $APP_BASE ?>views/perfil.php">
+      <span class="nav-icon">👤</span>
+      <span class="nav-text">Mi Perfil</span>
+    </a>
+  </div>
+</aside>
   <!-- ===== Contenido ===== -->
   <main class="content-area">
     <div class="page-wrapper">

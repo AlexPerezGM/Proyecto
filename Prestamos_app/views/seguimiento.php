@@ -2,10 +2,14 @@
 // /views/seguimiento.php
 require_once __DIR__ . '/../config/db.php';
 
-// Raíz base para URLs (idéntico a tus otros módulos)
 $APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $APP_BASE = preg_replace('#/views$#','', $APP_BASE);
 $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
+
+$BASE_URL = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$BASE_URL = preg_replace('#/views$#','', $BASE_URL);
+$BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
+
 ?>
 <!doctype html>
 <html lang="es">
@@ -13,80 +17,103 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
   <meta charset="utf-8">
   <title>Seguimiento de Préstamos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Reutiliza tus mismos estilos base -->
-  <link rel="stylesheet" href="<?= $APP_BASE ?>assets/css/dashboard.css">
-  <link rel="stylesheet" href="<?= $APP_BASE ?>assets/css/clientes.css">
-  <style>
-    /* Ajustes pequeños específicos del módulo */
-    .tabs { display:flex; gap:8px; margin-bottom:12px; }
-    .tab-btn { border:1px solid var(--border-soft); background:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
-    .tab-btn.active { background:#e0e7ff; border-color:#6366f1; color:#4338ca; font-weight:600; }
-    .layout { display:grid; grid-template-columns: 380px 1fr; gap:16px; }
-    @media (max-width: 1100px){ .layout { grid-template-columns: 1fr; } }
-    .sticky-col { position: sticky; top: 84px; align-self:start; }
-    .list-tools .input { min-width: 0; }
-    .pill { display:inline-block; padding:4px 8px; border-radius:999px; font-size:.75rem; }
-    .pill.activo { background:#ecfdf5; color:#065f46; border:1px solid #10b981; }
-    .pill.mora { background:#fee2e2; color:#991b1b; border:1px solid #ef4444; }
-    .pill.pendiente { background:#fef9c3; color:#78350f; border:1px solid #eab308; }
-    .mini-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
-    .mini-grid > div { background:#fff; border:1px solid var(--border-soft); border-radius:10px; padding:10px; }
-    .cfg-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
-    @media (max-width: 720px){ .cfg-grid { grid-template-columns: 1fr; } }
-    .preview-box { border:1px dashed var(--border-soft); background:#fff; border-radius:10px; padding:12px; white-space:pre-wrap; }
-  </style>
+  <base href="<?= $BASE_URL ?>">
+  <link rel="stylesheet" href="public/css/dashboard.css?v=1">
+  <link rel="stylesheet" href="public/css/clientes.css?v=1">
+  <link rel="stylesheet" href="public/css/seguimiento.css?v=1">
   <script>window.APP_BASE = "<?= $APP_BASE ?>";</script>
 </head>
 <body>
 <div class="app-shell">
   <!-- === SIDEBAR (idéntico a tus páginas) === -->
+  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
-    <div class="sidebar-inner">
+  <div class="sidebar-inner">
 
-      <!-- DASHBOARD -->
-      <div class="sidebar-section">
-        <div class="section-label">DASHBOARD</div>
-        <a class="nav-link" href="<?= $APP_BASE ?>index.php">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-text">Dashboard</span>
-        </a>
-      </div>
+    <!-- DASHBOARD -->
+    <div class="sidebar-section">
+      <div class="section-label">DASHBOARD</div>
 
-      <!-- GESTIÓN -->
-      <div class="sidebar-section">
-        <div class="section-label">GESTIÓN</div>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/clientes.php">
-          <span class="nav-icon">👥</span>
-          <span class="nav-text">Gestión de Clientes</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/prestamos.php">
-          <span class="nav-icon">💼</span>
-          <span class="nav-text">Control de Préstamos</span>
-        </a>
-
-        <a class="nav-link active" href="<?= $APP_BASE ?>views/seguimiento.php">
-          <span class="nav-icon">🔎</span>
-          <span class="nav-text">Seguimiento de Préstamos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/pagos.php">
-          <span class="nav-icon">💳</span>
-          <span class="nav-text">Gestión de Pagos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/configuracion.php">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-text">Configuración</span>
-        </a>
-      </div>
-
-      <div class="sidebar-footer">
-        <p class="footer-link">© Tu App</p>
-      </div>
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>index.php">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-text">Dashboard</span>
+      </a>
     </div>
-  </aside>
+
+    <!-- GESTIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">GESTIÓN</div>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/clientes.php">
+        <span class="nav-icon">👥</span>
+        <span class="nav-text">Gestión de Clientes</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/prestamos.php">
+        <span class="nav-icon">💼</span>
+        <span class="nav-text">Control de Préstamos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/pagos.php">
+        <span class="nav-icon">💰</span>
+        <span class="nav-text">Gestión de Pagos</span>
+      </a>
+
+      <a class="nav-link active"
+         href="<?= $APP_BASE ?>views/seguimiento.php">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Seguimiento de Préstamos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/reestructuracion.php">
+        <span class="nav-icon">♻️</span>
+        <span class="nav-text">Reestructuración de Préstamos</span>
+      </a>
+    </div>
+
+    <!-- ADMINISTRACIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">ADMINISTRACIÓN</div>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/seguridad.php">
+        <span class="nav-icon">🔐</span>
+        <span class="nav-text">Usuarios y Roles</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/rrhh.php">
+        <span class="nav-icon">🧑</span>
+        <span class="nav-text">Recursos Humanos</span>
+      </a>
+
+      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
+        <span class="nav-icon">📅</span>
+        <span class="nav-text">Campañas de promoción</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>logout.php">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-text">Cerrar Sesión</span>
+      </a>
+    </div>
+
+  </div><!-- /sidebar-inner -->
+
+  <div class="sidebar-footer">
+    <a class="nav-link footer-link"
+       href="<?= $APP_BASE ?>views/perfil.php">
+      <span class="nav-icon">👤</span>
+      <span class="nav-text">Mi Perfil</span>
+    </a>
+  </div>
+</aside>
 
   <!-- === CONTENIDO === -->
   <main class="content-area">
@@ -290,6 +317,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
   </div>
 </div>
 
-<script src="<?= $APP_BASE ?>assets/js/seguimiento.js" defer></script>
+  <script>window.APP_BASE = "<?= $BASE_URL ?>";</script>
 </body>
 </html>

@@ -1,6 +1,7 @@
-// assets/pagos.js
+// public/js/pagos.js
 (() => {
-  const API = (window.APP_BASE || '/') + 'api/pagos.php';
+const ROOT = location.pathname.replace(/\/views\/.*/,'/'); 
+const API  = ROOT + 'api/pagos.php';
 
   const $q = document.getElementById('q');
   const $btnBuscar = document.getElementById('btnBuscar');
@@ -21,7 +22,6 @@
     total: document.getElementById('p_total_hoy'),
   };
 
-  // Modales y forms
   const MODS = {
     efectivo: document.getElementById('modalEfectivo'),
     transfer: document.getElementById('modalTransfer'),
@@ -40,38 +40,42 @@
   const $btnCerrar   = document.getElementById('btnCerrar');
   const $btnAplicarMora = document.getElementById('btnAplicarMora');
 
-  // Hidden ids en forms
   const $ef_id = document.getElementById('ef_id_prestamo');
   const $tr_id = document.getElementById('tr_id_prestamo');
   const $ga_id = document.getElementById('ga_id_prestamo');
   const $cl_id = document.getElementById('cl_id_prestamo');
 
-  let prestamoSel = null; // {id_prestamo...}
+  let prestamoSel = null;
 
   async function jsonFetch(body){
     $err.hidden = true;
-    try{
-      const res = await fetch(API, { method:'POST', body: body instanceof FormData ? body : new URLSearchParams(body) });
-      const txt = await res.text();
-      try { return JSON.parse(txt); }
-      catch(e){ $err.hidden=false; $err.textContent='Respuesta no-JSON:\n'+txt.slice(0,2000); throw e; }
-    }catch(e){
-      if($err.hidden){ $err.hidden=false; $err.textContent='Error:\n'+(e.message||e); }
-      throw e;
-    }
+    const res = await fetch(API, {
+      method:'POST',
+      body: body instanceof FormData ? body : new URLSearchParams(body)
+    });
+    const txt = await res.text();
+    let js;
+    try { js = JSON.parse(txt); }
+    catch(e){ $err.hidden=false; $err.textContent='Respuesta no-JSON:\n'+txt.slice(0,2000); throw e; }
+    if (js && js.ok === false && js.msg) { $err.hidden=false; $err.textContent=js.msg; }
+    return js;
+  } 
+  
+function pintarTabla(rows){
+  if (!rows || rows.length === 0) {
+    $tab.innerHTML = `<tr><td colspan="5" class="muted">Sin resultados…</td></tr>`;
+    return;
   }
-
-  function pintarTabla(rows){
-    $tab.innerHTML = rows.map(r=>`
-      <tr>
-        <td>${r.id_prestamo}</td>
-        <td>${r.nombre} ${r.apellido}</td>
-        <td>${r.numero_documento ?? '-'}</td>
-        <td>${r.estado_prestamo ?? '-'}</td>
-        <td><button class="btn-light" data-sel="${r.id_prestamo}">Seleccionar</button></td>
-      </tr>
-    `).join('');
-  }
+  $tab.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.id_prestamo}</td>
+      <td>${r.nombre} ${r.apellido}</td>
+      <td>${r.numero_documento ?? '-'}</td>
+      <td>${r.estado_prestamo ?? '-'}</td>
+      <td><button class="btn-light" data-sel="${r.id_prestamo}">Seleccionar</button></td>
+    </tr>
+  `).join('');
+}
 
   async function cargarResumen(id){
     const js = await jsonFetch({ action:'summary', id_prestamo:id });
@@ -104,9 +108,13 @@
   }
 
   $btnBuscar.addEventListener('click', async () => {
-    const js = await jsonFetch({ action:'search', q: $q.value.trim() });
-    pintarTabla(js.data || []);
-  });
+  const js = await jsonFetch({ action:'search', q: $q.value.trim() });
+  const rows = js.data || [];
+  pintarTabla(rows);
+  if (rows.length === 1) {
+    await cargarResumen(+rows[0].id_prestamo);
+  }
+});
   $q.addEventListener('keydown', e => { if(e.key==='Enter') $btnBuscar.click(); });
 
   document.addEventListener('click', async (e)=>{
@@ -124,19 +132,16 @@
     ui.total.textContent = totalHoy.toFixed(2);
   });
 
-  // Abrir modales
   $btnEfectivo.addEventListener('click', ()=> open(MODS.efectivo));
   $btnTransfer.addEventListener('click', ()=> open(MODS.transfer));
   $btnGarantia.addEventListener('click', ()=> open(MODS.garantia));
   $btnCerrar  .addEventListener('click', ()=> open(MODS.cierre));
 
-  // Envío de formularios
-  function onSubmit(form, cb){
+  function onSubmit(form){
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const js = await jsonFetch(new FormData(form));
-      if (!js.ok && js.msg){ alert(js.msg); return; }
-      // Render comprobante
+      if (js && js.ok === false) return;
       const $c = document.getElementById('compContenido');
       if (js.comprobante){
         const c = js.comprobante;
@@ -145,9 +150,8 @@
             <h4 style="margin:0 0 8px">Recibo de pago</h4>
             <p><b>Préstamo:</b> ${prestamoSel?.id_prestamo ?? ''}</p>
             <p><b>Método:</b> ${c.metodo}</p>
-            <p><b>Monto:</b> ${c.moneda} ${(+c.monto).toFixed(2)} (≈ RD$ ${(c.monto_dop||c.monto).toFixed(2)})</p>
+            <p><b>Monto:</b> ${c.moneda} ${(+(c.monto)).toFixed(2)} (≈ RD$ ${(c.monto_dop||c.monto).toFixed(2)})</p>
             ${c.referencia ? `<p><b>Referencia:</b> ${c.referencia}</p>`:''}
-            ${c.motivo ? `<p><b>Motivo:</b> ${c.motivo}</p>`:''}
             ${c.observacion ? `<p><b>Observación:</b> ${c.observacion}</p>`:''}
             <p><b>Fecha:</b> ${c.fecha}</p>
             <p><b>ID de pago:</b> ${js.id_pago ?? '-'}</p>
@@ -167,7 +171,7 @@
         open(MODS.comp);
       }
       close(form.closest('.modal'));
-      await cargarResumen(prestamoSel.id_prestamo);
+      if (prestamoSel) await cargarResumen(prestamoSel.id_prestamo);
       form.reset();
     });
   }

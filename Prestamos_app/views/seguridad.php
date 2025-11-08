@@ -1,5 +1,4 @@
 <?php
-// views/seguridad.php
 require_once __DIR__ . '/../config/db.php';
 
 // Base URL y APP_BASE igual que en clientes.php
@@ -10,6 +9,11 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/');
 $APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 if ($APP_BASE === '') $APP_BASE = '/';
 $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
+
+$APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$APP_BASE = preg_replace('#/views$#','', $APP_BASE);
+$APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -18,81 +22,100 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
   <title>Usuarios y Roles</title>
   <base href="<?= $BASE_URL ?>">
   <link rel="stylesheet" href="public/css/dashboard.css?v=1">
-  <!-- Reutilizamos estilos base del módulo clientes (modales, grid, botones) -->
   <link rel="stylesheet" href="public/css/clientes.css?v=1">
 </head>
 <body>
+
 <div class="app-shell">
-
-  <!-- SIDEBAR -->
+  <!-- === SIDEBAR (idéntico a tus páginas) === -->
+  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
-    <div class="sidebar-inner">
+  <div class="sidebar-inner">
 
-      <div class="sidebar-section">
-        <div class="section-label">DASHBOARD</div>
-        <a class="nav-link" href="<?= $APP_BASE ?>index.php">
-          <span class="nav-icon">🏠</span><span class="nav-text">Dashboard</span>
-        </a>
-      </div>
+    <!-- DASHBOARD -->
+    <div class="sidebar-section">
+      <div class="section-label">DASHBOARD</div>
 
-      <div class="sidebar-section">
-        <div class="section-label">GESTIÓN</div>
-        <a class="nav-link" href="<?= $APP_BASE ?>views/clientes.php">
-          <span class="nav-icon">👥</span>
-          <span class="nav-text">Gestión de Clientes</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/prestamos.php">
-          <span class="nav-icon">💼</span>
-          <span class="nav-text">Control de Préstamos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/pagos.php">
-          <span class="nav-icon">💰</span>
-          <span class="nav-text">Gestión de Pagos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/seguimiento.php">
-          <span class="nav-icon">📈</span>
-          <span class="nav-text">Seguimiento de Préstamos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/restructuracion.php">
-          <span class="nav-icon">♻️</span>
-          <span class="nav-text">Reestructuración de Préstamos</span>
-        </a>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="section-label">ADMINISTRACIÓN</div>
-        <a class="nav-link active" href="<?= $APP_BASE ?>views/seguridad.php">
-          <span class="nav-icon">🔐</span>
-          <span class="nav-text">Usuarios y Roles</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/rrhh.php">
-          <span class="nav-icon">🧑</span>
-          <span class="nav-text">Recursos Humanos</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
-          <span class="nav-icon">📅</span>
-          <span class="nav-text">Campañas de promoción</span>
-        </a>
-
-        <a class="nav-link" href="<?= $APP_BASE ?>logout.php">
-          <span class="nav-icon">🚪</span>
-          <span class="nav-text">Cerrar Sesión</span>
-        </a>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      <a class="nav-link footer-link" href="<?= $APP_BASE ?>views/perfil.php">
-        <span class="nav-icon">👤</span><span class="nav-text">Mi Perfil</span>
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>index.php">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-text">Dashboard</span>
       </a>
     </div>
-  </aside>
+
+    <!-- GESTIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">GESTIÓN</div>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/clientes.php">
+        <span class="nav-icon">👥</span>
+        <span class="nav-text">Gestión de Clientes</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/prestamos.php">
+        <span class="nav-icon">💼</span>
+        <span class="nav-text">Control de Préstamos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/pagos.php">
+        <span class="nav-icon">💰</span>
+        <span class="nav-text">Gestión de Pagos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/seguimiento.php">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Seguimiento de Préstamos</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/reestructuracion.php">
+        <span class="nav-icon">♻️</span>
+        <span class="nav-text">Reestructuración de Préstamos</span>
+      </a>
+    </div>
+
+    <!-- ADMINISTRACIÓN -->
+    <div class="sidebar-section">
+      <div class="section-label">ADMINISTRACIÓN</div>
+
+      <a class="nav-link active"
+         href="<?= $APP_BASE ?>views/seguridad.php">
+        <span class="nav-icon">🔐</span>
+        <span class="nav-text">Usuarios y Roles</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>views/rrhh.php">
+        <span class="nav-icon">🧑</span>
+        <span class="nav-text">Recursos Humanos</span>
+      </a>
+
+      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
+        <span class="nav-icon">📅</span>
+        <span class="nav-text">Campañas de promoción</span>
+      </a>
+
+      <a class="nav-link"
+         href="<?= $APP_BASE ?>logout.php">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-text">Cerrar Sesión</span>
+      </a>
+    </div>
+
+  </div><!-- /sidebar-inner -->
+
+  <div class="sidebar-footer">
+    <a class="nav-link footer-link"
+       href="<?= $APP_BASE ?>views/perfil.php">
+      <span class="nav-icon">👤</span>
+      <span class="nav-text">Mi Perfil</span>
+    </a>
+  </div>
+</aside>
 
   <!-- CONTENIDO -->
   <div class="content-area"><!-- (mismo layout que clientes)  -->
