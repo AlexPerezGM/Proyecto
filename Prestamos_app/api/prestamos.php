@@ -67,9 +67,10 @@ function create_cronograma_frances($db, $id_prestamo, $principal, $tasa_anual, $
     if($k==$n_periodos){ $capital = $saldo; $cuota = $capital + $interes; }
     $saldo   = max(0, $saldo - $capital);
 
-    q($db, "INSERT INTO cronograma_cuota (id_prestamo,numero_cuota,fecha_vencimiento,capital_cuota,interes_cuota,total_monto,saldo_pendiente,estado_cuota) VALUES (?,?,?,?,?,?,?, 'Pendiente')",
-      [$id_prestamo,$k,$fecha->format('Y-m-d'), round($capital,2), round($interes,2), round($cuota,2), round($saldo,2)],
-      'iissddd');
+    // Ajuste a la estructura real de la tabla cronograma_cuota: usamos cargos_cuota y saldo_cuota
+    q($db, "INSERT INTO cronograma_cuota (id_prestamo,numero_cuota,fecha_vencimiento,capital_cuota,interes_cuota,cargos_cuota,total_monto,saldo_cuota,estado_cuota) VALUES (?,?,?,?,?,?,?,?, 'Pendiente')",
+      [$id_prestamo,$k,$fecha->format('Y-m-d'), round($capital,2), round($interes,2), 0.00, round($cuota,2), round($saldo,2)],
+      'iissdddd');
   }
 }
 
@@ -134,9 +135,12 @@ if ($act==='crear_personal'){
   $id_p = $db->insert_id;
 
   // condición y cronograma
-  [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (id_prestamo,tasa_interes,tipo_interes,tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) VALUES (?,?,?,?,?,CURDATE(),1)",
-                [$id_p,$tasa,'Nominal','Frances',$id_periodo],'idssi');
+  [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (tasa_interes,tipo_interes,tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) VALUES (?,?,?,?,CURDATE(),1)",
+                [$tasa,'Nominal','Frances',$id_periodo],'dssi');
   if(!$st2) out(['ok'=>false,'msg'=>$e2]);
+  // esquema actual: condicion_prestamo no tiene id_prestamo — guardamos la condición y enlazamos desde prestamo.id_condicion_actual
+  $id_cond = $db->insert_id;
+  $db->query("UPDATE prestamo SET id_condicion_actual = $id_cond WHERE id_prestamo = $id_p");
 
   $per = $db->query("SELECT periodo FROM cat_periodo_pago WHERE id_periodo_pago={$id_periodo}")->fetch_assoc()['periodo'] ?? 'Mensual';
   create_cronograma_frances($db, $id_p, $monto_dop, $tasa, $per, $plazo, $fecha);
@@ -175,9 +179,12 @@ if ($act==='crear_hipotecario'){
      [$id_p,$valor,$porc,$dir],'idds');
 
   // condición y cronograma
-  [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (id_prestamo,tasa_interes,tipo_interes,tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) VALUES (?,?,?,?,?,CURDATE(),1)",
-                [$id_p,$tasa,'Nominal','Frances',$id_periodo],'idssi');
+  [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (tasa_interes,tipo_interes,tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) VALUES (?,?,?,?,CURDATE(),1)",
+                [$tasa,'Nominal','Frances',$id_periodo],'dssi');
   if(!$st2) out(['ok'=>false,'msg'=>$e2]);
+  // esquema actual: condicion_prestamo no tiene id_prestamo — guardamos la condición y enlazamos desde prestamo.id_condicion_actual
+  $id_cond = $db->insert_id;
+  $db->query("UPDATE prestamo SET id_condicion_actual = $id_cond WHERE id_prestamo = $id_p");
 
   $per = $db->query("SELECT periodo FROM cat_periodo_pago WHERE id_periodo_pago={$id_periodo}")->fetch_assoc()['periodo'] ?? 'Mensual';
   create_cronograma_frances($db, $id_p, $monto_dop, $tasa, $per, $plazo, $fecha);
@@ -215,7 +222,7 @@ if ($act==='list'){
     FROM prestamo p
     JOIN cliente c ON c.id_cliente=p.id_cliente
     JOIN datos_persona dp ON c.id_datos_persona=dp.id_datos_persona
-    LEFT JOIN condicion_prestamo cp ON cp.id_prestamo=p.id_prestamo AND cp.esta_activo=1
+  LEFT JOIN condicion_prestamo cp ON cp.id_condicion_prestamo = p.id_condicion_actual AND cp.esta_activo=1
     LEFT JOIN cat_estado_prestamo ce ON ce.id_estado_prestamo=p.id_estado_prestamo
     LEFT JOIN documento_identidad di ON di.id_datos_persona=dp.id_datos_persona
     $w
@@ -240,7 +247,7 @@ if ($act==='get'){
     FROM prestamo p
     JOIN cliente c ON c.id_cliente=p.id_cliente
     JOIN datos_persona dp ON c.id_datos_persona=dp.id_datos_persona
-    LEFT JOIN condicion_prestamo cp ON cp.id_prestamo=p.id_prestamo AND cp.esta_activo=1
+  LEFT JOIN condicion_prestamo cp ON cp.id_condicion_prestamo = p.id_condicion_actual AND cp.esta_activo=1
     LEFT JOIN cat_estado_prestamo ce ON ce.id_estado_prestamo=p.id_estado_prestamo
     WHERE p.id_prestamo=?";
   [$st,$err]=q($db,$sql,[$id],'i');
@@ -301,7 +308,7 @@ if ($act==='recibo_html'){
     FROM prestamo p
     JOIN cliente c ON c.id_cliente=p.id_cliente
     JOIN datos_persona dp ON dp.id_datos_persona=c.id_datos_persona
-    LEFT JOIN condicion_prestamo cp ON cp.id_prestamo=p.id_prestamo AND cp.esta_activo=1
+  LEFT JOIN condicion_prestamo cp ON cp.id_condicion_prestamo = p.id_condicion_actual AND cp.esta_activo=1
     WHERE p.id_prestamo=$id_p")->fetch_assoc();
 
   $metodos = $db->query("SELECT id_tipo_pago, tipo_pago FROM cat_tipo_pago")->fetch_all(MYSQLI_ASSOC);

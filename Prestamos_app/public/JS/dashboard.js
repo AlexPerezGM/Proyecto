@@ -1,91 +1,146 @@
 // public/js/dashboard.js
-window.addEventListener("DOMContentLoaded", () => {
+(function () {
+  const ready = (fn) =>
+    document.readyState !== "loading"
+      ? fn()
+      : document.addEventListener("DOMContentLoaded", fn);
 
-    // ====== Gráfico de línea (tendencia 30 días) ======
-    const tendenciaCanvas = document.getElementById("chartTendencia30d");
-    if (tendenciaCanvas) {
-        const dataset = JSON.parse(tendenciaCanvas.getAttribute("data-series") || "{}");
-        const ctx = tendenciaCanvas.getContext("2d");
+  // Utilidades
+  const toCurrency = (v) =>
+    typeof v === "number"
+      ? "$" + v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+      : v;
 
-        new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: dataset.labels || [],
-                datasets: [
-                    {
-                        label: "Préstamos",
-                        data: dataset.prestamos || [],
-                        fill: true,
-                        borderColor: "#3b82f6",
-                        backgroundColor: "rgba(59,130,246,0.15)",
-                        tension: 0.3
-                    },
-                    {
-                        label: "Pagos",
-                        data: dataset.pagos || [],
-                        fill: true,
-                        borderColor: "#10b981",
-                        backgroundColor: "rgba(16,185,129,0.15)",
-                        tension: 0.3
-                    },
-                    {
-                        label: "Mora",
-                        data: dataset.mora || [],
-                        fill: true,
-                        borderColor: "#ef4444",
-                        backgroundColor: "rgba(239,68,68,0.15)",
-                        tension: 0.3
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: "bottom" }
-                },
-                scales: {
-                    y: {
-                        ticks: {
-                            callback: (val) => "$" + val
-                        }
-                    }
-                }
-            }
-        });
+  const getJSON = (el, attr, fallback = {}) => {
+    try {
+      const raw = el.getAttribute(attr) || "";
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      console.error("JSON inválido en", attr, e);
+      return fallback;
+    }
+  };
+
+  // Render línea (tendencias)
+  const renderTendencia = () => {
+    const canvas = document.getElementById("chartTendencia30d");
+    if (!canvas) return;
+
+    if (typeof Chart === "undefined") {
+      console.error("Chart.js no cargó. Verifica el <script> del CDN.");
+      return;
     }
 
-    // ====== Gráfico de barras (ingresos por interés mensual) ======
-    const interesCanvas = document.getElementById("chartIngresosInteres");
-    if (interesCanvas) {
-        const dataset = JSON.parse(interesCanvas.getAttribute("data-series") || "{}");
-        const ctx2 = interesCanvas.getContext("2d");
+    const ds = getJSON(canvas, "data-series", {
+      labels: [],
+      prestamos: [],
+      pagos: [],
+      castigos: [],
+    });
 
-        new Chart(ctx2, {
-            type: "bar",
-            data: {
-                labels: dataset.labels || [],
-                datasets: [
-                    {
-                        label: "Interés cobrado",
-                        data: dataset.values || [],
-                        backgroundColor: "#4f46e5"
-                    }
-                ]
+    const ctx = canvas.getContext("2d");
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: ds.labels || [],
+        datasets: [
+          {
+            label: "Desembolsos",
+            data: ds.prestamos || [],
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25,
+          },
+          {
+            label: "Cobros",
+            data: ds.pagos || [],
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25,
+          },
+          {
+            label: "Castigos",
+            data: ds.castigos || [],
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${toCurrency(ctx.parsed.y)}`,
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: "bottom" }
-                },
-                scales: {
-                    y: {
-                        ticks: {
-                            callback: (val) => "$" + val
-                        }
-                    }
-                }
-            }
-        });
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (val) => toCurrency(val) },
+          },
+        },
+      },
+    });
+  };
+
+  // Render barras (ingresos por interés)
+  const renderIngresosInteres = () => {
+    const canvas = document.getElementById("chartIngresosInteres");
+    if (!canvas) return;
+
+    if (typeof Chart === "undefined") {
+      console.error("Chart.js no cargó. Verifica el <script> del CDN.");
+      return;
     }
 
-});
+    const ds = getJSON(canvas, "data-series", {
+      labels: [],
+      values: [],
+    });
+
+    const ctx = canvas.getContext("2d");
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ds.labels || [],
+        datasets: [
+          {
+            label: "Intereses cobrados",
+            data: ds.values || [],
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${toCurrency(ctx.parsed.y)}`,
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (val) => toCurrency(val) },
+          },
+        },
+      },
+    });
+  };
+
+  // Init
+  ready(() => {
+    renderTendencia();
+    renderIngresosInteres();
+  });
+})();

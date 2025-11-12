@@ -30,8 +30,6 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
 <body>
 
 <div class="app-shell">
-  <!-- === SIDEBAR (idéntico a tus páginas) === -->
-  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">
 

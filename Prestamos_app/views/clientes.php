@@ -166,10 +166,26 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
         </section>
       </main>
     </div>
+    
   </div>
+  <select id="genero" name="genero" class="input" required>
+  <option value="">Seleccione…</option>
+  <?php foreach ($catGeneros as $g): ?>
+    <option value="<?= $g['id_genero'] ?>"><?= htmlspecialchars($g['genero']) ?></option>
+  <?php endforeach ?>
+</select>
+
+<select id="id_tipo_documento" name="id_tipo_documento" class="input" required>
+  <option value="">Seleccione…</option>
+  <?php foreach ($tiposDoc as $t): ?>
+    <option value="<?= $t['id_tipo_documento'] ?>"><?= htmlspecialchars($t['tipo_documento']) ?></option>
+  <?php endforeach ?>
+</select>
+
 
   <!-- Modales (crear/editar y ver) -->
   <div id="modalForm" class="modal" aria-hidden="true">
+    
     <div class="modal__dialog">
       <div class="modal__header">
         <h3 id="modalTitulo">Registrar cliente</h3>
@@ -178,6 +194,8 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
       <form id="frmCliente" class="modal__body">
         <input type="hidden" name="action" value="create">
         <input type="hidden" name="id_cliente" id="id_cliente">
+        
+        
 
         <div class="grid-2">
           <div>
@@ -224,6 +242,7 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
         <div class="modal__footer">
           <button class="btn-light" type="button" data-close>Cancelar</button>
           <button class="btn" type="submit">Guardar</button>
+          
         </div>
       </form>
     </div>

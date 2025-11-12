@@ -50,6 +50,22 @@
       throw e;
     }
   }
+  
+  async function cargarCatalogos(){
+  const cats = await jsonFetch(API, new URLSearchParams({action:'catalogos'}));
+  const $gen = document.getElementById('genero');
+  const $td  = document.getElementById('id_tipo_documento');
+  if (Array.isArray(cats.generos)){
+    $gen.innerHTML = '<option value="">Seleccione…</option>' +
+      cats.generos.map(g=>`<option value="${g.id_genero}">${g.genero}</option>`).join('');
+  }
+  if (Array.isArray(cats.tipos_documento)){
+    $td.innerHTML = '<option value="">Seleccione…</option>' +
+      cats.tipos_documento.map(t=>`<option value="${t.id_tipo_documento}">${t.tipo_documento}</option>`).join('');
+  }
+}
+document.addEventListener('DOMContentLoaded', cargarCatalogos);
+
 
   async function cargar(page=1){
     currentPage = page;
@@ -68,7 +84,9 @@
         <td>
           <button class="btn btn-light" data-ver="${r.id_cliente}">Ver</button>
           <button class="btn" data-editar="${r.id_cliente}">Modificar</button>
+          <button class="btn btn-danger" data-borrar="${r.id_cliente}">Eliminar</button>
         </td>
+
       </tr>
     `).join('');
 
@@ -97,11 +115,12 @@
   });
 
   document.addEventListener('click', async (e) => {
-    const v = e.target.closest('[data-ver]');
-    const ed = e.target.closest('[data-editar]');
-    if (!v && !ed) return;
+    const v   = e.target.closest('[data-ver]');
+    const ed  = e.target.closest('[data-editar]');
+    const del = e.target.closest('[data-borrar]');
+    if (!v && !ed && !del) return;
 
-    const id = (v ? v.dataset.ver : ed.dataset.editar);
+const id = v ? v.dataset.ver : (ed ? ed.dataset.editar : del.dataset.borrar);
     const params = new URLSearchParams({ action:'get', id_cliente: id });
     const c = await jsonFetch(API, params);
 
@@ -155,6 +174,15 @@
       }
       openModal($modalForm);
     }
+    
+    if (del){
+  if (!confirm('¿Eliminar este cliente? Esta acción no se puede deshacer.')) return;
+  const params = new URLSearchParams({ action:'delete', id_cliente: id });
+  const r = await jsonFetch(API, params);
+  if (!r.ok) return alert(r.error || r.msg || 'Error al eliminar');
+  cargar(currentPage);
+  return;
+}
   });
 
   function esMayorDeEdad(fechaStr){
@@ -174,9 +202,11 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return alert('Email no válido.');
 
     const ing = +document.getElementById('ingresos_mensuales').value;
-    const egr = +document.getElementById('egresos_mensuales').value;
-    if (isNaN(ing) || isNaN(egr) || ing < 0 || egr < 0 || ing < egr)
-      return alert('Verifica ingresos/egresos (ingresos ≥ egresos).');
+const egr = +document.getElementById('egresos_mensuales').value;
+if (isNaN(ing) || isNaN(egr) || ing < 10000 || ing <= egr) {
+  return alert('Verifica ingresos/egresos (ingresos ≥ 10,000 y mayores que egresos).');
+}
+
 
     const json = await jsonFetch(API, new FormData($frm));
     if (!json.ok) return alert(json.msg || 'Error en la operación');

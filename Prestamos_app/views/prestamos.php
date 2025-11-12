@@ -130,9 +130,6 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
 
     <div class="page-wrapper">
       <div class="tabs">
-        <button class="btn" data-tab="solicitar">Solicitar préstamo</button>
-        <button class="btn outline" data-tab="lista">Lista de préstamos</button>
-        <button class="btn outline" data-tab="desembolso">Desembolso de préstamos</button>
       </div>
 
       <!-- SOLICITAR -->
