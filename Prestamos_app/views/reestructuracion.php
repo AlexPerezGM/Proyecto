@@ -1,6 +1,9 @@
 <?php
 // views/restructuracion.php
 require_once __DIR__ . '/../config/db.php';
+// Asegurar sesión para mostrar user-chip cuando corresponda
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
 $BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $BASE = preg_replace('#/views$#','', $BASE);
 $BASE = ($BASE === '' ? '/' : $BASE . '/');
@@ -27,8 +30,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 </head>
 <body>
 <div class="app-shell">
-  <!-- ===== Sidebar (mismo markup) ===== -->
-  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">
 
@@ -37,7 +38,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -100,7 +101,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
@@ -118,23 +119,31 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 </aside>
   <!-- ===== Contenido ===== -->
   <main class="content-area">
-    <div class="page-wrapper">
-
-      <div class="topbar topbar-light">
-        <div class="topbar-left">
-          <div class="brand-inline">
-            <div class="brand-logo">🛠️</div>
-            <div class="brand-name">Reestructuración de Préstamos</div>
-          </div>
-          <span class="range-pill">Supervisor</span>
+    <div class="topbar topbar-light">
+      <div class="topbar-left">
+        <div class="brand-inline">
+          <span class="brand-logo">🛠️</span>
+          <span class="brand-name">Reestructuración de Préstamos</span>
         </div>
-        <div class="topbar-right">
-          <div class="user-chip">
-            <div class="avatar-circle">RV</div>
-            <div class="user-info"><div class="user-name">Ricardo</div><div class="user-role">Admin</div></div>
-          </div>
-        </div>
+        <span class="range-pill">Supervisor</span>
       </div>
+      <div class="topbar-right">
+        <button class="small-btn">Acciones</button>
+        <?php if (!empty($_SESSION['usuario'])): ?>
+        <div class="user-chip">
+          <div class="avatar-circle"><?= htmlspecialchars($_SESSION['usuario']['inicial_empleado'] ?? '') ?></div>
+          <div class="user-info"><div class="user-name"><?= htmlspecialchars($_SESSION['usuario']['nombre_empleado'] ?? $_SESSION['usuario']['nombre_usuario'] ?? '') ?></div><div class="user-role"><?= htmlspecialchars($_SESSION['usuario']['rol'] ?? '') ?></div></div>
+        </div>
+        <?php else: ?>
+        <div class="user-chip">
+          <div class="avatar-circle">RV</div>
+          <div class="user-info"><div class="user-name">Ricardo</div><div class="user-role">Admin</div></div>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <div class="page-wrapper">
 
       <div class="grid-page">
         <!-- LISTADO -->

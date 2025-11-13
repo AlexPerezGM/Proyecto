@@ -21,14 +21,13 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
   <meta charset="UTF-8">
   <title>Usuarios y Roles</title>
   <base href="<?= $BASE_URL ?>">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="public/css/dashboard.css?v=1">
   <link rel="stylesheet" href="public/css/clientes.css?v=1">
 </head>
 <body>
 
 <div class="app-shell">
-  <!-- === SIDEBAR (idéntico a tus páginas) === -->
-  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">
 
@@ -37,7 +36,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -94,13 +93,13 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <span class="nav-text">Recursos Humanos</span>
       </a>
 
-      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
+      <a class="nav-link" href="<?= $APP_BASE ?>views/campanas_promocion.php">
         <span class="nav-icon">📅</span>
         <span class="nav-text">Campañas de promoción</span>
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
@@ -155,7 +154,13 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <div class="card-body">
           <div class="table-responsive">
             <table class="table-simple" id="tablaUsuarios">
-              <thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead>
+              <thead><tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Empleado</th>
+                <th>Acciones</th>
+              </tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -213,13 +218,16 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <div>
           <label>Usuario *</label>
           <input name="usuario" id="usuario" class="input" required>
-          <label>Contraseña <small>(deja en blanco para no cambiar)</small></label>
+          <label>Contraseña</label>
           <input name="contrasena" id="contrasena" class="input" type="password">
         </div>
         <div>
           <label>Rol *</label>
           <select name="id_rol" id="id_rol_user" class="input" required></select>
         </div>
+        <div>
+          <label>Empleado *</label>
+          <select name="id_datos_persona" id="id_datos_persona" class="input" required></select>
       </div>
 
       <div class="modal__footer">

@@ -12,15 +12,15 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Recursos Humanos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/dashboard.css">
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/clientes.css">
 </head>
 <body>
   
 <div class="app-shell">
-  <!-- === SIDEBAR (idéntico a tus páginas) === -->
-  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">
 
@@ -29,7 +29,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -86,13 +86,13 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <span class="nav-text">Recursos Humanos</span>
       </a>
 
-      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
+      <a class="nav-link" href="<?= $APP_BASE ?>views/campanas_promocion.php">
         <span class="nav-icon">📅</span>
         <span class="nav-text">Campañas de promoción</span>
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
@@ -126,6 +126,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <div class="list-tools-inner">
           <button id="tabEmpleados" class="btn">Gestión de empleados</button>
           <button id="tabNomina" class="btn btn-light">Nómina</button>
+          <button id="tabAsistencia" class="btn btn-light">Asistencia</button>
         </div>
       </div>
 
@@ -203,6 +204,34 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
           </div>
         </div>
       </section>
+
+      <section id="secAsistencia" style="display:none">
+        <div class="card table-card">
+          <div class="card-header">Control de asistencia</div>
+          <div class="card-body">
+            <div class="list-tools-inner">
+              <input id="fechaAsist" type="date" class="input">
+              <button id="btnCargarAsist" class="btn">Ver asistencia</button>
+              <button id="btnMarcarEntrada" class="btn">Marcar entrada</button>
+              <button id="btnMarcarSalida" class="btn btn-light">Marcar salida</button>
+            </div>
+            <div class="table-responsive" style="margin-top:12px;">
+              <table id="tablaAsistencia" class="table-simple">
+                <thead>
+                  <tr>
+                    <th>Empleado</th>
+                    <th>Entrada</th>
+                    <th>Salida</th>
+                    <th>Retraso (min)</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
 
     </div>
   </main>

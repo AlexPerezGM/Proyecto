@@ -43,7 +43,7 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -106,7 +106,7 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>

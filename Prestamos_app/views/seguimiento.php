@@ -25,8 +25,6 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
 </head>
 <body>
 <div class="app-shell">
-  <!-- === SIDEBAR (idéntico a tus páginas) === -->
-  <div class="app-shell">
   <aside class="sidebar sidebar-expanded">
   <div class="sidebar-inner">
 
@@ -35,7 +33,7 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -98,7 +96,7 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
@@ -136,47 +134,55 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
       </div>
 
       <div class="layout">
-        <!-- Columna izquierda: LISTA (siempre visible) -->
-        <div class="sticky-col">
-          <div class="card">
-            <div class="card-header">Préstamos</div>
-            <div class="card-body">
-              <div class="list-tools">
-                <div class="list-tools-inner">
-                  <input id="qSeg" class="input" placeholder="Buscar por nombre…">
-                  <button id="btnBuscarSeg" class="btn">Buscar</button>
-                </div>
-              </div>
+        <!-- Columna izquierda: (moved into Evaluación) -->
 
-              <div class="table-responsive">
-                <table class="table-simple" id="tablaPrestamos">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Cliente</th>
-                      <th>Estado</th>
-                      <th>Monto</th>
-                      <th>Plazo</th>
-                      <th>Próx./Últ. Venc.</th>
-                      <th>Mora</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-              <div class="pager" id="paginacionSeg"></div>
-
-              <div id="errorBoxSeg" class="error-box" hidden></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Columna derecha: CONTENIDOS POR PESTAÑA -->
-        <div>
+        <!-- Contenido principal: ocupar ambas columnas -->
+        <div style="grid-column:1 / -1;">
           <!-- EVALUACIÓN -->
           <div id="tabEvaluacion">
+            <!-- Lista de Préstamos (moved arriba de Evaluación) -->
             <div class="card">
+              <div class="card-header">Préstamos</div>
+              <div class="card-body">
+                <div class="list-tools">
+                  <div class="list-tools-inner">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                      <input id="qSeg" class="input" placeholder="Buscar por nombre o ID…" style="min-width:180px;">
+                      <label style="font-size:.9rem; margin:0 4px;">Desde</label>
+                      <input id="fDesde" type="date" class="input" style="max-width:150px;">
+                      <label style="font-size:.9rem; margin:0 4px;">Hasta</label>
+                      <input id="fHasta" type="date" class="input" style="max-width:150px;">
+                      <button id="btnBuscarSeg" class="btn">Buscar</button>
+                      <button id="btnExportSeg" class="btn btn-light">Exportar CSV</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table-simple" id="tablaPrestamos">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Estado</th>
+                        <th>Monto</th>
+                        <th>Plazo</th>
+                        <th>Próx./Últ. Venc.</th>
+                        <th>Mora</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="pager" id="paginacionSeg"></div>
+                <div id="errorBoxSeg" class="error-box" hidden></div>
+                <div id="spinnerSeg" class="spinner" hidden aria-hidden="true"></div>
+              </div>
+            </div>
+
+            <!-- Evaluación (abajo) -->
+            <div class="card" style="margin-top:12px;" id="cardEvaluacion">
               <div class="card-header">Evaluación del préstamo</div>
               <div class="card-body">
                 <div class="mini-grid">
@@ -206,9 +212,29 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
                   </div>
                 </div>
 
-                <div style="margin-top:12px; display:flex; gap:8px;">
+                <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
                   <button id="btnAprobar" class="btn">Aprobar</button>
                   <button id="btnRechazar" class="btn btn-light">Rechazar</button>
+                  <div style="margin-left:12px;">&nbsp;</div>
+                </div>
+
+                <hr style="margin:14px 0;">
+
+                <!-- Datacrédito / Buro -->
+                <div style="margin-top:6px;">
+                  <h4>Verificación Datacrédito</h4>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button id="btnCheckData" class="btn btn-light">Verificar Datacrédito</button>
+                    <div id="evDataResult" style="font-size:.95rem; color:var(--muted,#333);">—</div>
+                  </div>
+                </div>
+
+                <hr style="margin:14px 0;">
+
+                <!-- Documentos -->
+                <div>
+                  <h4>Documentos del cliente</h4>
+                  <div id="evDocs" class="preview-box">No se han cargado los documentos.</div>
                 </div>
               </div>
             </div>
@@ -317,6 +343,23 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
   </div>
 </div>
 
+<!-- Modal Detalle del préstamo -->
+<div class="modal" id="modalDetalle">
+  <div class="modal__dialog modal__dialog--wide">
+    <div class="modal__header">
+      <div>Detalle del préstamo</div>
+      <button class="modal__close" data-close>✕</button>
+    </div>
+    <div class="modal__body">
+      <div id="detalleContent" style="min-height:160px; white-space:pre-wrap; font-family:monospace; font-size:0.95rem;">Cargando…</div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn-light" data-close>Cerrar</button>
+    </div>
+  </div>
+</div>
+
   <script>window.APP_BASE = "<?= $BASE_URL ?>";</script>
+  <script src="public/JS/seguimiento.js?v=1"></script>
 </body>
 </html>

@@ -1,4 +1,9 @@
 <?php
+session_start();
+if (!isset($_SESSION['usuario'])) {
+    header('Location: ../login.php');
+    exit;
+}
 require_once __DIR__ . '/../includes/dashboard_data.php';
 
 // Datos del dashboard
@@ -14,10 +19,13 @@ $alertasSys      = getAlertasSistema($conn);
 // Helper para JSON seguro
 function j($arr){ return htmlspecialchars(json_encode($arr), ENT_QUOTES, 'UTF-8'); }
 
-// Ruta base para WAMP Siempre ban de ultimo
-$APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
-if ($APP_BASE === '') $APP_BASE = '/';
-$APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
+// Ruta base: calcular la base al nivel del proyecto (no incluir /views)
+$scriptDir = str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME']));
+$APP_BASE = rtrim(dirname($scriptDir), '/');
+if ($APP_BASE === '' || $APP_BASE === false) {
+  $APP_BASE = '/';
+}
+$APP_BASE = $APP_BASE . '/';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -38,7 +46,7 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
       <div class="section-label">DASHBOARD</div>
 
       <a class="nav-link active"
-         href="<?= $APP_BASE ?>index.php">
+         href="<?= $APP_BASE ?>views/dashboard.php">
         <span class="nav-icon">🏠</span>
         <span class="nav-text">Dashboard</span>
       </a>
@@ -101,7 +109,7 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
       </a>
 
       <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
+         href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
@@ -136,12 +144,14 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
 
       <div class="topbar-right">
         <button class="small-btn">⚙ Editar</button>
-
+        <?php
+        $u = $_SESSION['usuario'];
+        ?>
         <div class="user-chip">
-          <div class="avatar-circle">R</div>
+          <div class="avatar-circle"><?= htmlspecialchars($u['inicial_empleado'] ?? '') ?></div>
           <div class="user-info">
-            <div class="user-name">Ricardo</div>
-            <div class="user-role">Administrador</div>
+            <div class="user-name"><?= htmlspecialchars($u['nombre_empleado'] ?? $u['nombre_usuario']) ?></div>
+            <div class="user-role"><?= htmlspecialchars($u['rol']) ?></div>
           </div>
         </div>
       </div>

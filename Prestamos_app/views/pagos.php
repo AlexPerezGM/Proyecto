@@ -6,6 +6,9 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 if (file_exists($root.'/config/db.php')) { require_once $root.'/config/db.php'; }
 
+// Asegurar sesión para poder mostrar user-chip cuando corresponda
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
 // Calcula raíz para todas las rutas (igual que en tus otras vistas)
 $APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $APP_BASE = preg_replace('#/views$#','', $APP_BASE);
@@ -13,116 +16,126 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
 ?>
 <!doctype html>
 <html lang="es">
-  
 <head>
   <meta charset="utf-8" />
   <title>Gestión de Pagos</title>
-  <!-- ESTA LÍNEA ARREGLA TODAS LAS RUTAS RELATIVAS -->
   <base href="<?= htmlspecialchars($APP_BASE, ENT_QUOTES) ?>">
-
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Estilos globales + estilos del módulo -->
   <link rel="stylesheet" href="public/css/dashboard.css">
   <link rel="stylesheet" href="public/css/pagos.css">
-  
+  <link rel="stylesheet" href="public/css/clientes.css">
+  <style>
+    @media (min-width: 900px) {
+      .main-area { margin-left: 240px; }
+    }
+    @media (max-width: 900px) {
+      .main-area { margin-left: 0; }
+    }
+  </style>
 </head>
 <body>
 
   <div class="app-shell">
+  <!-- Sidebar unificado -->
   <aside class="sidebar sidebar-expanded">
-  <div class="sidebar-inner">
+    <div class="sidebar-inner">
 
-    <!-- DASHBOARD -->
-    <div class="sidebar-section">
-      <div class="section-label">DASHBOARD</div>
+      <!-- DASHBOARD -->
+      <div class="sidebar-section">
+        <div class="section-label">DASHBOARD</div>
+        <a class="nav-link" href="views/dashboard.php">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-text">Dashboard</span>
+        </a>
+      </div>
 
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>index.php">
-        <span class="nav-icon">🏠</span>
-        <span class="nav-text">Dashboard</span>
-      </a>
+      <!-- GESTIÓN -->
+      <div class="sidebar-section">
+        <div class="section-label">GESTIÓN</div>
+
+        <a class="nav-link" href="views/clientes.php">
+          <span class="nav-icon">👥</span>
+          <span class="nav-text">Gestión de Clientes</span>
+        </a>
+
+        <a class="nav-link" href="views/prestamos.php">
+          <span class="nav-icon">💼</span>
+          <span class="nav-text">Control de Préstamos</span>
+        </a>
+
+        <a class="nav-link active" href="views/pagos.php">
+          <span class="nav-icon">💰</span>
+          <span class="nav-text">Gestión de Pagos</span>
+        </a>
+
+        <a class="nav-link" href="views/seguimiento.php">
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">Seguimiento de Préstamos</span>
+        </a>
+
+        <a class="nav-link" href="views/reestructuracion.php">
+          <span class="nav-icon">♻️</span>
+          <span class="nav-text">Reestructuración de Préstamos</span>
+        </a>
+      </div>
+
+      <!-- ADMINISTRACIÓN -->
+      <div class="sidebar-section">
+        <div class="section-label">ADMINISTRACIÓN</div>
+
+        <a class="nav-link" href="views/seguridad.php">
+          <span class="nav-icon">🔐</span>
+          <span class="nav-text">Usuarios y Roles</span>
+        </a>
+
+        <a class="nav-link" href="views/rrhh.php">
+          <span class="nav-icon">🧑</span>
+          <span class="nav-text">Recursos Humanos</span>
+        </a>
+
+        <a class="nav-link" href="views/promociones.php">
+          <span class="nav-icon">📅</span>
+          <span class="nav-text">Campañas de promoción</span>
+        </a>
+
+        <a class="nav-link" href="api/cerrar_sesion.php">
+          <span class="nav-icon">🚪</span>
+          <span class="nav-text">Cerrar Sesión</span>
+        </a>
+      </div>
     </div>
 
-    <!-- GESTIÓN -->
-    <div class="sidebar-section">
-      <div class="section-label">GESTIÓN</div>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/clientes.php">
-        <span class="nav-icon">👥</span>
-        <span class="nav-text">Gestión de Clientes</span>
-      </a>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/prestamos.php">
-        <span class="nav-icon">💼</span>
-        <span class="nav-text">Control de Préstamos</span>
-      </a>
-
-      <a class="nav-link active"
-         href="<?= $APP_BASE ?>views/pagos.php">
-        <span class="nav-icon">💰</span>
-        <span class="nav-text">Gestión de Pagos</span>
-      </a>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/seguimiento.php">
-        <span class="nav-icon">📈</span>
-        <span class="nav-text">Seguimiento de Préstamos</span>
-      </a>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/reestructuracion.php">
-        <span class="nav-icon">♻️</span>
-        <span class="nav-text">Reestructuración de Préstamos</span>
+    <div class="sidebar-footer">
+      <a class="nav-link footer-link" href="views/perfil.php">
+        <span class="nav-icon">👤</span>
+        <span class="nav-text">Mi Perfil</span>
       </a>
     </div>
-
-    <!-- ADMINISTRACIÓN -->
-    <div class="sidebar-section">
-      <div class="section-label">ADMINISTRACIÓN</div>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/seguridad.php">
-        <span class="nav-icon">🔐</span>
-        <span class="nav-text">Usuarios y Roles</span>
-      </a>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>views/rrhh.php">
-        <span class="nav-icon">🧑</span>
-        <span class="nav-text">Recursos Humanos</span>
-      </a>
-
-      <a class="nav-link" href="<?= $APP_BASE ?>views/promociones.php">
-        <span class="nav-icon">📅</span>
-        <span class="nav-text">Campañas de promoción</span>
-      </a>
-
-      <a class="nav-link"
-         href="<?= $APP_BASE ?>logout.php">
-        <span class="nav-icon">🚪</span>
-        <span class="nav-text">Cerrar Sesión</span>
-      </a>
-    </div>
-
-  </div><!-- /sidebar-inner -->
-
-  <div class="sidebar-footer">
-    <a class="nav-link footer-link"
-       href="<?= $APP_BASE ?>views/perfil.php">
-      <span class="nav-icon">👤</span>
-      <span class="nav-text">Mi Perfil</span>
-    </a>
-  </div>
   </aside>
-  
   <!-- Contenido -->
-  <main class="content">
-    <h1 style="display:flex;align-items:center;gap:.5rem"><span>💰</span> Gestión de Pagos</h1>
+  <div class="main-area">
+    <!-- TOPBAR UNIFICADA -->
+    <header class="topbar topbar-light">
+      <div class="topbar-left">
+        <div class="brand-inline">
+          <span class="brand-logo">💰</span>
+          <span class="brand-name">Gestión de Pagos</span>
+        </div>
+      </div>
 
+      <div class="topbar-right">
+        <button class="small-btn">Registrar pago</button>
+        <?php if (!empty($_SESSION['usuario'])): ?>
+        <div class="user-chip">
+          <div class="avatar-circle"><?= htmlspecialchars($_SESSION['usuario']['inicial_empleado'] ?? '') ?></div>
+          <div class="user-info"><div class="user-name"><?= htmlspecialchars($_SESSION['usuario']['nombre_empleado'] ?? $_SESSION['usuario']['nombre_usuario'] ?? '') ?></div><div class="user-role"><?= htmlspecialchars($_SESSION['usuario']['rol'] ?? '') ?></div></div>
+        </div>
+        <?php endif; ?>
+      </div>
+    </header>
     <!-- Caja de error para respuestas no-JSON -->
     <div id="errorBox" class="alert" hidden></div>
+
     <!-- Buscar préstamo -->
     <section class="card">
       <div class="card-header">Buscar préstamo</div>
@@ -188,7 +201,8 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         </div>
       </div>
     </section>
-  </main>
+  </div>
+  </div>
 
   <!-- MODALES -->
   <!-- Efectivo -->
