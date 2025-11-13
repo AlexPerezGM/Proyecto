@@ -110,7 +110,7 @@ if ($action === 'emp_create' || $action === 'emp_update'){
       if($telefono){ $st=$conn->prepare("INSERT INTO telefono (id_datos_persona,telefono,es_principal) VALUES (?,?,1)"); $st->bind_param('is',$id_dp,$telefono); $st->execute(); $st->close(); }
       if($email){ $st=$conn->prepare("INSERT INTO email (id_datos_persona,email,es_principal) VALUES (?,?,1)"); $st->bind_param('is',$id_dp,$email); $st->execute(); $st->close(); }
       if($ciudad || $sector || $calle || $numero_casa){
-        $st=$conn->prepare("INSERT INTO direccion (id_datos_persona,ciudad,sector,calle,numero_casa,es_principal) VALUES (?,?,?,?,?,1)");
+        $st=$conn->prepare("INSERT INTO direccion (id_datos_persona,ciudad,sector,calle,numero_casa) VALUES (?,?,?,?,?)");
         $st->bind_param('isssi',$id_dp,$ciudad,$sector,$calle,$numero_casa); $st->execute(); $st->close();
       }
       // 5) contrato
@@ -148,7 +148,7 @@ if ($action === 'emp_create' || $action === 'emp_update'){
       // direccion
       $conn->query("DELETE FROM direccion WHERE id_datos_persona=$id_dp");
       if($ciudad||$sector||$calle||$numero_casa){
-        $st=$conn->prepare("INSERT INTO direccion (id_datos_persona,ciudad,sector,calle,numero_casa,es_principal) VALUES (?,?,?,?,?,1)");
+        $st=$conn->prepare("INSERT INTO direccion (id_datos_persona,ciudad,sector,calle,numero_casa) VALUES (?,?,?,?,?)");
         $st->bind_param('isssi',$id_dp,$ciudad,$sector,$calle,$numero_casa); $st->execute(); $st->close();
       }
       // contrato vigente (reemplaza)
@@ -253,4 +253,39 @@ if ($action === 'nomina_comprobantes'){
   j(['ok'=>true,'html'=>$html]);
 }
 
+if ($action === 'asis_list'){
+  $fecha = getStr('fecha', date('Y-m-d'));
+  $sql = "
+    SELECT a.id_asistencia_empleado, CONCAT(dp.nombre,' ',dp.apellido) AS nombre,
+           a.hora_entrada, a.hora_salida, a.retraso_minutos
+    FROM asistencia_empleado a
+    JOIN empleado e ON e.id_empleado=a.id_empleado
+    JOIN datos_persona dp ON dp.id_datos_persona=e.id_datos_persona
+    WHERE a.fecha=?
+    ORDER BY nombre";
+  $st=$conn->prepare($sql);
+  $st->bind_param('s',$fecha);
+  $st->execute();
+  $rs=$st->get_result();
+  j(['ok'=>true,'data'=>$rs->fetch_all(MYSQLI_ASSOC)]);
+}
+
+if ($action === 'asis_entrada'){
+  $fecha = date('Y-m-d'); $hora = date('H:i:s');
+  $id_emp = 1;
+  $horaRef = strtotime('08:00:00');
+  $retraso = max(0, round((strtotime($hora) - $horaRef)/60));
+  $conn->query("INSERT INTO asistencia_empleado (id_empleado,fecha,hora_entrada,retraso_minutos)
+                VALUES ($id_emp,'$fecha','$hora',$retraso)
+                ON DUPLICATE KEY UPDATE hora_entrada='$hora', retraso_minutos=$retraso");
+  j(['ok'=>true]);
+}
+
+if ($action === 'asis_salida'){
+  $fecha = date('Y-m-d'); $hora = date('H:i:s');
+  $id_emp = 1; 
+  $conn->query("UPDATE asistencia_empleado SET hora_salida='$hora' WHERE id_empleado=$id_emp AND fecha='$fecha'");
+  j(['ok'=>true]);
+}
+// Acción por defecto si no coincide ninguna
 j(['ok'=>false,'msg'=>'Acción no reconocida']);
