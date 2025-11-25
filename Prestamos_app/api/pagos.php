@@ -33,6 +33,57 @@ function bind_dynamic(mysqli_stmt $st, string $types, array &$params): void {
 }
 function num_or_null($v){ return is_numeric($v) ? (int)$v : null; }
 
+function current_user_id(): ?int {
+  if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+  }
+  if (isset($_SESSION['usuario']['id_usuario']) && is_numeric((string)$_SESSION['usuario']['id_usuario'])) {
+    return (int)$_SESSION['usuario']['id_usuario'];
+  }
+  return null;
+}
+
+function require_user_id(): int {
+  $id = current_user_id();
+  if (!$id) {
+    bad('Sesión no válida. Inicia sesión nuevamente.', 401);
+  }
+  return $id;
+}
+
+/**
+ * Calcula la mora total de un préstamo usando el porcentaje configurado.
+ * Si no existe config_mora, usa 2% como valor por defecto.
+ */
+function calcular_mora(mysqli $conn, int $id_prestamo): float {
+  $sql = "SELECT COALESCE(SUM(saldo_cuota),0) AS total_vencido
+          FROM cronograma_cuota
+          WHERE id_prestamo=? AND estado_cuota='Vencida'";
+  $st = $conn->prepare($sql);
+  $st->bind_param('i', $id_prestamo);
+  $st->execute();
+  $vencido = (float)($st->get_result()->fetch_assoc()['total_vencido'] ?? 0);
+  $st->close();
+
+  $porcentaje = 2.0; // 2% por defecto
+  if (column_exists($conn, 'config_mora', 'porcentaje_mora')) {
+    $hasActivo = column_exists($conn, 'config_mora', 'activo');
+    $sql = "SELECT porcentaje_mora FROM config_mora"
+         . ($hasActivo ? " WHERE activo = 1" : "")
+         . " LIMIT 1";
+    $st = $conn->prepare($sql);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if ($row && $row['porcentaje_mora'] !== null) {
+      $porcentaje = (float)$row['porcentaje_mora'];
+    }
+  }
+
+  $factor = $porcentaje / 100.0;
+  return round($vencido * $factor, 2);
+}
+
 /* -------- Router -------- */
 $action = (string)rq('action','');
 if ($action === '') bad('Falta action');
@@ -68,7 +119,7 @@ if ($action === 'search') {
           . ($hasDigits   ? " OR REPLACE(di.numero_documento,'-','') LIKE ?" : "")
           . ($isNumId     ? " OR p.id_prestamo = ?" : "")
           . ")
-          GROUP BY p.id_prestamo
+          GROUP BY p.id_prestamo, dp.nombre, dp.apellido, di.numero_documento, ce.estado
           ORDER BY p.id_prestamo DESC
           LIMIT 50";
 
@@ -86,32 +137,46 @@ if ($action === 'search') {
 }
 
 /* ==========================================================
-   SUMMARY: datos del préstamo + cuota actual + saldo + mora
+   SUMMARY: resumen de préstamo + cuota actual + mora
    ========================================================== */
 if ($action === 'summary') {
   $id = num_or_null(rq('id_prestamo'));
   if (!$id) bad('id_prestamo inválido');
 
-  // Estado préstamo + saldo total
-  $sql = "SELECT p.id_prestamo, COALESCE(ce.estado,'') estado,
-                 COALESCE(SUM(c.saldo_cuota),0) saldo_total
-          FROM prestamo p
-          LEFT JOIN cat_estado_prestamo ce ON ce.id_estado_prestamo = p.id_estado_prestamo
-          LEFT JOIN cronograma_cuota c ON c.id_prestamo = p.id_prestamo
-          WHERE p.id_prestamo=? GROUP BY p.id_prestamo";
+  // Datos principales del préstamo
+$sql = "SELECT 
+            p.id_prestamo,
+            ce.estado,
+            COALESCE(SUM(cu.saldo_cuota),0) AS saldo_total
+        FROM prestamo p
+        LEFT JOIN cronograma_cuota cu 
+          ON cu.id_prestamo = p.id_prestamo
+        LEFT JOIN cat_estado_prestamo ce 
+          ON ce.id_estado_prestamo = p.id_estado_prestamo
+        WHERE p.id_prestamo = ?
+        GROUP BY p.id_prestamo, ce.estado";
   $st = $conn->prepare($sql);
   $st->bind_param('i', $id);
   $st->execute();
-  $resumen = $st->get_result()->fetch_assoc() ?: ['id_prestamo'=>$id,'estado'=>'','saldo_total'=>0];
+  $resumen = $st->get_result()->fetch_assoc() ?: [];
   $st->close();
 
-  // Cuota actual: prioriza vencidas; si no hay, la pendiente más próxima
-  $sql = "SELECT id_cronograma_cuota, numero_cuota, fecha_vencimiento,
-                 capital_cuota AS capital, interes_cuota AS interes, cargos_cuota AS cargos,
-                 saldo_cuota
+  // Cuota actual (vencida o la siguiente pendiente)
+  $sql = "SELECT 
+            id_cronograma_cuota,
+            numero_cuota,
+            fecha_vencimiento,
+            capital_cuota    AS capital,
+            interes_cuota    AS interes,
+            cargos_cuota     AS cargos,
+            saldo_cuota,
+            estado_cuota
           FROM cronograma_cuota
-          WHERE id_prestamo=? AND estado_cuota IN ('Vencida','Pendiente')
-          ORDER BY (estado_cuota='Pendiente') ASC, fecha_vencimiento ASC
+          WHERE id_prestamo=?
+          ORDER BY 
+            (estado_cuota='Vencida') DESC,
+            (estado_cuota='Pendiente') DESC,
+            fecha_vencimiento ASC
           LIMIT 1";
   $st = $conn->prepare($sql);
   $st->bind_param('i', $id);
@@ -119,15 +184,17 @@ if ($action === 'summary') {
   $cuota = $st->get_result()->fetch_assoc() ?: null;
   $st->close();
 
-  // Mora simple: 2% del saldo vencido acumulado (puedes ajustar fórmula)
-  $sql = "SELECT COALESCE(SUM(saldo_cuota),0) AS total_vencido
-          FROM cronograma_cuota WHERE id_prestamo=? AND estado_cuota='Vencida'";
-  $st = $conn->prepare($sql);
-  $st->bind_param('i', $id);
-  $st->execute();
-  $vencido = (float)($st->get_result()->fetch_assoc()['total_vencido'] ?? 0);
-  $st->close();
-  $mora = round($vencido * 0.02, 2); // <-- regla de negocio ajustable
+  // Normalizar tipos numéricos de la cuota para que el frontend reciba números
+  if ($cuota) {
+    $cuota['numero_cuota'] = isset($cuota['numero_cuota']) ? (int)$cuota['numero_cuota'] : null;
+    $cuota['capital']      = (float)($cuota['capital'] ?? 0);
+    $cuota['interes']      = (float)($cuota['interes'] ?? 0);
+    $cuota['cargos']       = (float)($cuota['cargos'] ?? 0);
+    $cuota['saldo_cuota']  = (float)($cuota['saldo_cuota'] ?? 0);
+  }
+
+  // Mora según configuración (config_mora)
+  $mora = calcular_mora($conn, $id);
 
   ok(['ok'=>true,'resumen'=>[
         'id_prestamo'=>$id,
@@ -145,14 +212,7 @@ if ($action === 'summary') {
 if ($action === 'calc_mora') {
   $id = num_or_null(rq('id_prestamo'));
   if (!$id) bad('id_prestamo inválido');
-  $sql = "SELECT COALESCE(SUM(saldo_cuota),0) AS total_vencido
-          FROM cronograma_cuota WHERE id_prestamo=? AND estado_cuota='Vencida'";
-  $st = $conn->prepare($sql);
-  $st->bind_param('i', $id);
-  $st->execute();
-  $vencido = (float)($st->get_result()->fetch_assoc()['total_vencido'] ?? 0);
-  $st->close();
-  $mora = round($vencido * 0.02, 2);
+  $mora = calcular_mora($conn, $id);
   ok(['ok'=>true,'mora_total'=>$mora]);
 }
 
@@ -168,7 +228,7 @@ if ($action === 'pay') {
   $obs = (string)rq('observacion','');
 
   // map método → id_tipo_pago (ajusta si en catálogo usas otros ids)
-  $map = ['Efectivo'=>1, 'Transferencia'=>2, 'Cheque'=>3, 'Garantía'=>10];
+  $map = ['Efectivo'=>1, 'Transferencia'=>2, 'Cheque'=>3];
   $id_metodo = $map[$metodo] ?? 1;
 
   // convertir a DOP según cat_tipo_moneda.valor
@@ -182,13 +242,25 @@ if ($action === 'pay') {
   $monto_dop = round($monto * $factor, 2);
 
   // insertar pago
-  $sql = "INSERT INTO pago (id_prestamo, fecha_pago, monto_pagado, metodo_pago, id_tipo_moneda, creado_por, observacion)
-          VALUES (?, CURRENT_DATE(), ?, ?, ?, 1, ?)";
+  $usuario_id = require_user_id();
+  $sql = "INSERT INTO pago (id_prestamo, fecha_pago, monto_pagado, metodo_pago, id_tipo_moneda, creado_por)
+          VALUES (?, CURRENT_DATE(), ?, ?, ?, ?)";
   $st = $conn->prepare($sql);
-  $st->bind_param('idiis', $id, $monto_dop, $id_metodo, $id_moneda, $obs);
+  $st->bind_param('idiii', $id, $monto_dop, $id_metodo, $id_moneda, $usuario_id);
   $st->execute();
   $id_pago = (int)$st->insert_id;
   $st->close();
+
+  // detalle específico por método (si decides usar tablas pago_efectivo/pago_transferencia)
+  if ($metodo === 'Transferencia') {
+    if (column_exists($conn,'pago_transferencia','referencia')) {
+      $sql = "INSERT INTO pago_transferencia (id_pago, referencia) VALUES (?,?)";
+      $st  = $conn->prepare($sql);
+      $st->bind_param('is', $id_pago, $ref);
+      $st->execute();
+      $st->close();
+    }
+  }
 
   // asignar a cuota actual: cargos → interés → capital (distribución simple)
   $sql = "SELECT id_cronograma_cuota, capital_cuota, interes_cuota, cargos_cuota, saldo_cuota, estado_cuota
@@ -211,7 +283,7 @@ if ($action === 'pay') {
               VALUES (?,?,?,?)";
       $st = $conn->prepare($sql);
       $idc = (int)$cuota['id_cronograma_cuota'];
-      $st->bind_param('iiss', $id_pago, $idc, $m, $tipo);
+      $st->bind_param('iids', $id_pago, $idc, $m, $tipo);
       $st->execute();
       $st->close();
       $resto -= $m;
@@ -242,33 +314,16 @@ if ($action === 'pay') {
       'monto_dop'=>$monto_dop,
       'referencia'=>$ref,
       'observacion'=>$obs,
-      'fecha'=>date('Y-m-d')
+      'fecha'=>date('Y-m-d H:i')
     ]
   ]);
 }
 
 /* ==========================================================
-   GARANTIA: registra uso de garantía como pago
+   GARANTÍA: por ahora no implementado → se deshabilita en UI
    ========================================================== */
 if ($action === 'garantia') {
-  // Atajo: tratamos como pago con método "Garantía"
-  $_POST['metodo'] = 'Garantía';
-  $_POST['id_tipo_moneda'] = $_POST['id_tipo_moneda'] ?? 1;
-  $_POST['monto'] = $_POST['monto'] ?? 0;
-  $action = 'pay';
-  // re-entrar en la lógica de pay
-  $_POST['action'] = 'pay';
-  // Include self once más no; solo “fall through” usando el bloque de arriba
-  // pero para mantener la estructura devolvemos mismo formato:
-  // (en producción moveríamos a función y la reutilizamos)
-  // Por simplicidad:
-  // -> copia de parámetros y return rápido
-  // Para evitar recursión, salimos con error si no vino monto
-  if ((float)$_POST['monto'] <= 0) bad('monto inválido');
-  // Reemitimos la petición localmente:
-  // *No* hacemos include, simplemente duplicaríamos el bloque de PAY,
-  // pero para no inflar el archivo, devolvemos error amigable:
-  bad('Usa action=pay con metodo=Garantía');
+  bad('El uso de garantía aún no está implementado en este módulo.');
 }
 
 /* ==========================================================
@@ -277,6 +332,10 @@ if ($action === 'garantia') {
 if ($action === 'close') {
   $id = num_or_null(rq('id_prestamo')); if (!$id) bad('id_prestamo inválido');
   $obs = (string)rq('observacion','');
+
+  // Validar usuario autenticado (aunque no se guarda en esta tabla,
+  // evita que un anónimo cierre préstamos).
+  require_user_id();
 
   $sql = "SELECT COALESCE(SUM(saldo_cuota),0) saldo FROM cronograma_cuota WHERE id_prestamo=?";
   $st = $conn->prepare($sql);
@@ -287,8 +346,17 @@ if ($action === 'close') {
 
   if ($saldo > 0.0001) bad('No se puede cerrar: aún existe saldo pendiente.');
 
-  // Estado 'Pagado' (o 'Cerrado' si lo manejas aparte). En tu dump existe 'Pagado' con id=5.
-  $id_estado = 5;
+  // Estado final: usar el id de 'Cerrado' desde cat_estado_prestamo
+  $sql = "SELECT id_estado_prestamo FROM cat_estado_prestamo WHERE estado='Cerrado' LIMIT 1";
+  $st = $conn->prepare($sql);
+  $st->execute();
+  $row = $st->get_result()->fetch_assoc();
+  $st->close();
+  $id_estado = (int)($row['id_estado_prestamo'] ?? 0);
+  if ($id_estado <= 0) {
+    bad("No se encontró el estado 'Cerrado' en cat_estado_prestamo.");
+  }
+
   $st = $conn->prepare("UPDATE prestamo SET id_estado_prestamo=? WHERE id_prestamo=?");
   $st->bind_param('ii', $id_estado, $id);
   $st->execute();
@@ -300,6 +368,7 @@ if ($action === 'close') {
     'observacion'=>$obs
   ]]);
 }
+
 
 /* -------- Default -------- */
 bad('Action no soportada', 404);
