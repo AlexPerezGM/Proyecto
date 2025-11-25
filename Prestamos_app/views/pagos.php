@@ -112,6 +112,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
       </a>
     </div>
   </aside>
+
   <!-- Contenido -->
   <div class="main-area">
     <!-- TOPBAR UNIFICADA -->
@@ -128,18 +129,31 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         <?php if (!empty($_SESSION['usuario'])): ?>
         <div class="user-chip">
           <div class="avatar-circle"><?= htmlspecialchars($_SESSION['usuario']['inicial_empleado'] ?? '') ?></div>
-          <div class="user-info"><div class="user-name"><?= htmlspecialchars($_SESSION['usuario']['nombre_empleado'] ?? $_SESSION['usuario']['nombre_usuario'] ?? '') ?></div><div class="user-role"><?= htmlspecialchars($_SESSION['usuario']['rol'] ?? '') ?></div></div>
+          <div class="user-info">
+            <div class="user-name">
+              <?= htmlspecialchars($_SESSION['usuario']['nombre_empleado'] ?? $_SESSION['usuario']['nombre_usuario'] ?? '') ?>
+            </div>
+            <div class="user-role">
+              <?= htmlspecialchars($_SESSION['usuario']['rol'] ?? '') ?>
+            </div>
+          </div>
         </div>
         <?php endif; ?>
       </div>
     </header>
+
     <!-- Caja de error para respuestas no-JSON -->
     <div id="errorBox" class="alert" hidden></div>
 
     <!-- Buscar préstamo -->
     <section class="card">
-      <div class="card-header">Buscar préstamo</div>
+      <div class="card-header">Buscar préstamo / contrato</div>
       <div class="card-body">
+        <p class="card-subtitle">
+          Selecciona el préstamo que se va a cobrar. La búsqueda puede hacerse por nombre del cliente,
+          cédula, número de contrato o ID interno del préstamo.
+        </p>
+
         <div style="display:flex;gap:.5rem;align-items:center">
           <input id="q" type="text" class="input" placeholder="Nombre / Cédula / Contrato / ID préstamo">
           <button id="btnBuscar" class="btn-primary">Buscar</button>
@@ -164,41 +178,83 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
 
     <!-- Panel de resumen / cobro -->
     <section id="panelResumen" class="card" style="display:none">
-      <div class="card-header">Resumen del préstamo</div>
+      <div class="card-header">Resumen y cobro del préstamo</div>
       <div class="card-body">
+
         <div class="grid" style="grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px">
+          <!-- Información general -->
           <div class="box">
-            <h3>Estado</h3>
+            <h3>Información del préstamo</h3>
             <p><b>Estado:</b> <span id="p_estado">-</span></p>
             <p><b>Saldo pendiente:</b> RD$ <span id="p_saldo">0.00</span></p>
+            <p class="text-muted">
+              El saldo incluye capital pendiente más intereses generados hasta la fecha.
+            </p>
           </div>
+
+          <!-- Factura / cuota actual -->
           <div class="box">
-            <h3>Cuota de hoy</h3>
-            <p><b>#</b> <span id="c_num">-</span> • <b>Vence:</b> <span id="c_fecha">-</span></p>
+            <h3>Factura / cuota actual</h3>
+            <p>
+              <b>Factura:</b> <span id="c_factura">-</span>
+            </p>
+            <p>
+              <b>Cuota #</b> <span id="c_num">-</span>
+              &bull;
+              <b>Vence:</b> <span id="c_fecha">-</span>
+            </p>
             <ul style="margin:0;padding-left:16px">
               <li>Capital: RD$ <span id="c_capital">0.00</span></li>
               <li>Interés: RD$ <span id="c_interes">0.00</span></li>
-              <li>Cargos: RD$ <span id="c_cargos">0.00</span></li>
-              <li>Saldo cuota: RD$ <span id="c_saldo">0.00</span></li>
+              <li>Cargos / comisiones: RD$ <span id="c_cargos">0.00</span></li>
+              <li>Saldo de la cuota: RD$ <span id="c_saldo">0.00</span></li>
             </ul>
+            <p class="text-muted" style="margin-top:4px">
+              Cada factura se asocia a una cuota específica del cronograma (por ejemplo,
+              factura 1 → cuota 5).
+            </p>
           </div>
+
+          <!-- Mora -->
           <div class="box">
-            <h3>Mora</h3>
+            <h3>Mora acumulada</h3>
             <p><b>Mora calculada:</b> RD$ <span id="p_mora">0.00</span></p>
+            <p class="text-muted">
+              La mora se calcula automáticamente en la base de datos mediante un evento nocturno,
+              según el porcentaje de mora configurado.
+            </p>
             <button id="btnAplicarMora" class="btn-light">Recalcular mora</button>
           </div>
+
+          <!-- Total a pagar -->
           <div class="box">
-            <h3>Total a pagar hoy</h3>
-            <p style="font-size:1.3rem"><b>RD$ <span id="p_total_hoy">0.00</span></b></p>
+            <h3>Total a pagar (hoy)</h3>
+            <p style="font-size:1.3rem">
+              <b>RD$ <span id="p_total_hoy">0.00</span></b>
+            </p>
+            <ul style="margin:0;padding-left:16px" class="text-muted">
+              <li>1️⃣ Primero se cancela la <b>mora</b> generada.</li>
+              <li>2️⃣ Luego se paga el <b>interés</b> de la cuota.</li>
+              <li>3️⃣ Finalmente se abona al <b>capital</b> de la cuota.</li>
+              <li>Si el pago no cubre el total, el restante queda pendiente y genera nueva mora.</li>
+              <li>Si el pago excede el total, el excedente se abona a la siguiente cuota.</li>
+            </ul>
           </div>
         </div>
 
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:12px">
-          <button id="btnEfectivo" class="btn-primary">Pago en efectivo</button>
-          <button id="btnTransfer" class="btn-primary">Pago por transferencia</button>
-          <button id="btnGarantia" class="btn-primary">Usar garantía</button>
-          <button id="btnCerrar"   class="btn-danger">Cerrar préstamo</button>
+        <!-- Selección de tipo de pago -->
+        <div class="pago-tipos">
+          <p class="pago-tipos__title">
+            Selecciona el tipo de pago que se va a registrar para esta factura:
+          </p>
+          <div class="pago-tipos__buttons">
+            <button id="btnEfectivo" class="btn-primary">Pago en efectivo</button>
+            <button id="btnTransfer" class="btn-primary">Pago por transferencia</button>
+            <button id="btnGarantia" class="btn-primary">Usar garantía</button>
+            <button id="btnCerrar"   class="btn-danger">Cerrar préstamo</button>
+          </div>
         </div>
+
       </div>
     </section>
   </div>
@@ -220,17 +276,17 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
           <label>Monto entregado</label>
           <input type="number" step="0.01" name="monto" class="input" required>
 
-          <label>Moneda</label>
+          <label>Tipo de moneda</label>
           <select name="id_tipo_moneda" class="input">
             <option value="1">DOP</option>
             <option value="2">USD</option>
           </select>
 
-          <label>Observación (opcional)</label>
+          <label>Observación del pago (opcional)</label>
           <textarea name="observacion" class="input"></textarea>
         </div>
         <div class="modal-footer">
-          <button type="submit" class="btn-primary">Registrar pago y generar comprobante</button>
+          <button type="submit" class="btn-primary">Registrar pago y generar factura (PDF)</button>
           <button type="button" data-close class="btn-light">Cancelar</button>
         </div>
       </form>
@@ -249,23 +305,23 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         <input type="hidden" name="metodo" value="Transferencia">
         <input type="hidden" id="tr_id_prestamo" name="id_prestamo">
         <div class="modal-body">
-          <label>Número de referencia</label>
+          <label>Número de referencia bancaria</label>
           <input type="text" name="referencia" class="input">
 
           <label>Monto transferido</label>
           <input type="number" step="0.01" name="monto" class="input" required>
 
-          <label>Moneda</label>
+          <label>Tipo de moneda</label>
           <select name="id_tipo_moneda" class="input">
             <option value="1">DOP</option>
             <option value="2">USD</option>
           </select>
 
-          <label>Observación (opcional)</label>
+          <label>Observación del pago (opcional)</label>
           <textarea name="observacion" class="input"></textarea>
         </div>
         <div class="modal-footer">
-          <button type="submit" class="btn-primary">Registrar pago y generar comprobante</button>
+          <button type="submit" class="btn-primary">Registrar pago y generar factura (PDF)</button>
           <button type="button" data-close class="btn-light">Cancelar</button>
         </div>
       </form>
@@ -283,16 +339,20 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         <input type="hidden" name="action" value="garantia">
         <input type="hidden" id="ga_id_prestamo" name="id_prestamo">
         <div class="modal-body">
+          <p class="text-muted">
+            Se aplicará el monto seleccionado de la garantía asociada al préstamo.
+          </p>
+
           <label>ID Garantía (asociada al préstamo)</label>
           <input type="number" name="id_garantia" class="input" required>
 
           <label>Monto a usar</label>
           <input type="number" step="0.01" name="monto" class="input" required>
 
-          <label>Motivo (opcional)</label>
+          <label>Motivo del uso de la garantía (opcional)</label>
           <input type="text" name="motivo" class="input">
 
-          <label>Observación (opcional)</label>
+          <label>Observación del pago (opcional)</label>
           <textarea name="observacion" class="input"></textarea>
         </div>
         <div class="modal-footer">
@@ -314,12 +374,15 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         <input type="hidden" name="action" value="close">
         <input type="hidden" id="cl_id_prestamo" name="id_prestamo">
         <div class="modal-body">
-          <p>Validaré que no exista saldo pendiente. Si todo está en cero, se cambia a “Cerrado” y se libera garantía.</p>
+          <p class="text-muted">
+            Se validará que no exista saldo pendiente (capital, intereses o mora). Si todo está en cero,
+            el préstamo pasará a estado <b>Cerrado</b> y las garantías quedarán liberadas.
+          </p>
           <label>Observación (opcional)</label>
           <textarea name="observacion" class="input"></textarea>
         </div>
         <div class="modal-footer">
-          <button type="submit" class="btn-danger">Validar y cerrar</button>
+          <button type="submit" class="btn-danger">Validar, cerrar y generar comprobante</button>
           <button type="button" data-close class="btn-light">Cancelar</button>
         </div>
       </form>
@@ -340,9 +403,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
     </div>
   </div>
 
-  <!-- Tu JS del módulo -->
-  <script src="public/js/pagos.js" defer></script>
-  <!-- Si guardas JS en assets/, usa esta línea y elimina la anterior -->
-  <script src="assets/pagos.js" defer></script>
+  <script src="<?= $APP_BASE ?>public/JS/pagos.js"></script>
+
 </body>
 </html>
