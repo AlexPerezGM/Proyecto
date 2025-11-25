@@ -97,13 +97,18 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
       </a>
 
       <a class="nav-link"
+         href="<?= $APP_BASE ?>views/configuracion.php">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-text">Configuración</span>
+      </a>
+
+      <a class="nav-link"
          href="<?= $APP_BASE ?>api/cerrar_sesion.php">
         <span class="nav-icon">🚪</span>
         <span class="nav-text">Cerrar Sesión</span>
       </a>
     </div>
-
-  </div><!-- /sidebar-inner -->
+  </div>
 
   <div class="sidebar-footer">
     <a class="nav-link footer-link"
@@ -143,12 +148,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
 
     <div class="page-wrapper">
       <div class="tabs">
-        <button class="btn" data-tab="solicitar">Solicitar</button>
-        <button class="btn outline" data-tab="lista">Lista</button>
-        <button class="btn outline" data-tab="desembolso">Desembolso</button>
       </div>
-
-      <!-- SOLICITAR -->
       <section id="sec-solicitar" class="panel">
         <div class="card">
           <div class="card-header">Solicitar préstamo</div>
@@ -177,8 +177,6 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
         </div>
       </section>
-
-      <!-- LISTA -->
       <section id="sec-lista" class="panel hidden" style="margin-top: 16px;">
         <div class="card">
           <div class="card-header">Lista de préstamos</div>
@@ -219,8 +217,6 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
         </div>
       </section>
-
-      <!-- DESEMBOLSO -->
       <section id="sec-desembolso" class="panel hidden" style="margin-top: 16px;">
         <div class="card">
           <div class="card-header">Desembolso</div>
@@ -262,16 +258,11 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
         </div>
       </section>
-
-      <!-- ERRORES -->
       <div id="errorBox" class="error-box" hidden></div>
     </div>
   </main>
 </div>
 
-<!-- MODALES -->
-
-<!-- Crear/editar cliente rápido (usa api/clientes.php) -->
 <div class="modal" id="modalCrearCliente">
   <div class="modal__dialog">
     <div class="modal__header">
@@ -305,7 +296,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
   </div>
 </div>
 
-<!-- Solicitud PERSONAL -->
+<!-- Solicitud préstamo personal -->
 <div class="modal" id="modalPersonal">
   <div class="modal__dialog">
     <div class="modal__header">
@@ -319,17 +310,15 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
         <div class="grid-2">
           <div>
             <label class="mini">Monto solicitado</label>
-            <input class="input" name="monto_solicitado" id="monto_personal" type="number" step="0.01" min="1000" required>
-            <small class="mini">Monto mínimo: $1,000</small>
+            <input class="input" name="monto_solicitado" id="monto_personal" type="number" step="0.01" min="10000" required>
           </div>
           <div>
             <label class="mini">Tasa interés (anual %)</label>
             <input class="input" name="tasa_interes" id="tasa_personal" type="number" step="0.01" required readonly>
-            <small class="mini">Tasa fija del sistema</small>
           </div>
           <div>
             <label class="mini">Plazo (meses)</label>
-            <input class="input" name="plazo_meses" type="number" min="1" max="60" required>
+            <select class="input" name="plazo_meses" id="plazo_personal" required></select>
           </div>
           <div>
             <label class="mini">Fecha solicitud</label>
@@ -341,13 +330,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
           <div>
             <label class="mini">Tipo de garantía</label>
-            <select class="input" name="tipo_garantia" required>
-              <option value="">Seleccionar...</option>
-              <option value="inmobiliaria">Propiedades inmobiliarias</option>
-              <option value="vehiculo">Vehículos</option>
-              <option value="prenda">Prendas u objetos de valor</option>
-              <option value="garante">Garante</option>
-            </select>
+            <select class="input" name="tipo_garantia" id="garantia_personal" required></select>
           </div>
           <div>
             <label class="mini">Frecuencia de pagos</label>
@@ -358,8 +341,6 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
             <input class="input" name="motivo" placeholder="Ej: Gastos médicos, educación, etc.">
           </div>
         </div>
-        
-        <!-- Sección de documentos -->
         <div style="margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
           <h5 style="margin: 0 0 12px 0;">Documentos adjuntos</h5>
           <div class="grid-2">
@@ -368,23 +349,16 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
               <input type="file" name="documento_garantia[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
               <small class="mini">Formatos: PDF, JPG, PNG</small>
             </div>
-            <div>
-              <label class="mini">Documentos personales</label>
-              <input type="file" name="documento_personal[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
-              <small class="mini">Cédula, comprobantes de ingresos, etc.</small>
-            </div>
           </div>
         </div>
         <div class="modal__footer">
-          <button type="button" id="btnMinPersonal" class="btn btn-light">Usar mínimos por defecto</button>
           <button class="btn" type="submit">Crear préstamo</button>
         </div>
       </form>
     </div>
   </div>
 </div>
-
-<!-- Solicitud HIPOTECARIO -->
+<!-- Solicitud préstamo hipotecario -->
 <div class="modal" id="modalHipotecario">
   <div class="modal__dialog">
     <div class="modal__header">
@@ -400,17 +374,14 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           <div>
             <label class="mini">Monto solicitado</label>
             <input class="input" name="monto_solicitado" id="monto_hipo" type="number" step="0.01" min="10000" required>
-            <small class="mini">Monto mínimo: $10,000</small>
           </div>
           <div>
             <label class="mini">Tasa interés (anual %)</label>
             <input class="input" name="tasa_interes" id="tasa_hipo" type="number" step="0.01" required readonly>
-            <small class="mini">Tasa fija del sistema</small>
           </div>
           <div>
             <label class="mini">Plazo (meses)</label>
-            <input class="input" name="plazo_meses" type="number" min="12" max="360" required>
-            <small class="mini">Entre 12 y 360 meses</small>
+            <select class="input" name="plazo_meses" id="plazo_hipo" required></select>
           </div>
           <div>
             <label class="mini">Fecha solicitud</label>
@@ -422,13 +393,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
           <div>
             <label class="mini">Tipo de garantía</label>
-            <select class="input" name="tipo_garantia" required>
-              <option value="">Seleccionar...</option>
-              <option value="inmobiliaria">Propiedades inmobiliarias</option>
-              <option value="vehiculo">Vehículos</option>
-              <option value="prenda">Prendas u objetos de valor</option>
-              <option value="garante">Garante</option>
-            </select>
+            <select class="input" name="tipo_garantia" id="garantia_hipo" required></select>
           </div>
           <div>
             <label class="mini">Frecuencia de pagos</label>
@@ -440,15 +405,13 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           </div>
           <div>
             <label class="mini">Valor del inmueble</label>
-            <input class="input" name="valor_propiedad" id="valor_inmueble" type="number" step="0.01" min="1" required>
+            <input class="input" name="valor_propiedad" id="valor_inmueble" type="number" step="0.01" required>
           </div>
           <div>
-            <label class="mini">% a financiar (máx. 80%)</label>
-            <input class="input" name="porcentaje_financiamiento" id="porc_fin" type="number" min="0" max="80" step="0.01" required>
-            <small class="mini">Máximo 80% del valor del inmueble</small>
+            <label class="mini">Porcentaje a financiar</label>
+            <input class="input" name="porcentaje_financiamiento" id="porc_fin" type="number" min="0" max="80" step="0.01" required readonly>
           </div>
         </div>
-        
         <!-- Sección de documentos -->
         <div style="margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
           <h5 style="margin: 0 0 12px 0;">Documentos adjuntos</h5>
@@ -458,34 +421,25 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
               <input type="file" name="documento_garantia[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
               <small class="mini">Escrituras, avalúos, etc.</small>
             </div>
-            <div>
-              <label class="mini">Documentos personales</label>
-              <input type="file" name="documento_personal[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
-              <small class="mini">Cédula, comprobantes de ingresos, etc.</small>
-            </div>
           </div>
         </div>
-        
         <div class="modal__footer">
-          <button type="button" id="btnMinHipotecario" class="btn btn-light">Usar mínimos por defecto</button>
           <button class="btn" type="submit">Crear préstamo</button>
         </div>
       </form>
     </div>
   </div>
 </div>
-
-<!-- Ver préstamo -->
 <div class="modal" id="modalVerPrestamo">
   <div class="modal__dialog">
     <div class="modal__header">
       <h4 style="margin:0;">Detalle de préstamo</h4>
+      <button class="btn btn-light" id="btnExportarCronograma">Exportar Cronograma</button>
       <button class="modal__close" data-close>Salir</button>
     </div>
     <div class="modal__body" id="verPrestamoContenido"></div>
   </div>
 </div>
-
 <!-- Recibo -->
 <div class="modal" id="modalRecibo">
   <div class="modal__dialog">
@@ -500,7 +454,6 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
     <div class="modal__body" id="reciboHTML"></div>
   </div>
 </div>
-
 <script>window.APP_BASE = "<?= $BASE ?>";</script>
 <script src="<?= $BASE ?>public/JS/prestamos.js"></script>
 </body>
