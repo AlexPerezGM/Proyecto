@@ -341,16 +341,38 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
             <input class="input" name="motivo" placeholder="Ej: Gastos médicos, educación, etc.">
           </div>
         </div>
+
+        <!-- NUEVA SECCIÓN DOCUMENTOS ADJUNTOS (PERSONAL) -->
         <div style="margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
-          <h5 style="margin: 0 0 12px 0;">Documentos adjuntos</h5>
+          <h5 style="margin: 0 0 8px 0;">Documentos adjuntos</h5>
+          <p class="mini">
+            Estos documentos se guardarán en la carpeta del cliente seleccionado.
+          </p>
           <div class="grid-2">
             <div>
-              <label class="mini">Documentos de garantía</label>
-              <input type="file" name="documento_garantia[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
-              <small class="mini">Formatos: PDF, JPG, PNG</small>
+              <label class="mini">Tipo de documento</label>
+              <select id="tipoDocPersonal" class="input" disabled>
+                <option value="">Seleccione...</option>
+              </select>
+              <small class="mini">La lista se ajusta para préstamos personales.</small>
+            </div>
+            <div>
+              <label class="mini">Archivo (PDF/JPG/PNG)</label>
+              <input type="file"
+                     id="archivoDocPersonal"
+                     class="input"
+                     accept=".pdf,.jpg,.jpeg,.png"
+                     disabled>
+              <small class="mini">Se permite un archivo por vez.</small>
             </div>
           </div>
+          <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="btnSubirDocPersonal" class="btn" disabled>Subir documento</button>
+            <button type="button" id="btnVerDocsPersonal" class="btn btn-light" disabled>📁 Ver documentos del cliente</button>
+          </div>
+          <div id="boxDocsPersonal" class="mini" style="margin-top:6px;"></div>
         </div>
+
         <div class="modal__footer">
           <button class="btn" type="submit">Crear préstamo</button>
         </div>
@@ -358,6 +380,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
     </div>
   </div>
 </div>
+
 <!-- Solicitud préstamo hipotecario -->
 <div class="modal" id="modalHipotecario">
   <div class="modal__dialog">
@@ -412,17 +435,38 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
             <input class="input" name="porcentaje_financiamiento" id="porc_fin" type="number" min="0" max="80" step="0.01" required readonly>
           </div>
         </div>
-        <!-- Sección de documentos -->
+
+        <!-- NUEVA SECCIÓN DOCUMENTOS ADJUNTOS (HIPOTECARIO) -->
         <div style="margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
-          <h5 style="margin: 0 0 12px 0;">Documentos adjuntos</h5>
+          <h5 style="margin: 0 0 8px 0;">Documentos adjuntos</h5>
+          <p class="mini">
+            Estos documentos se guardarán en la carpeta del cliente seleccionado (título, tasaciones, seguros, etc.).
+          </p>
           <div class="grid-2">
             <div>
-              <label class="mini">Documentos de garantía</label>
-              <input type="file" name="documento_garantia[]" class="input" multiple accept=".pdf,.jpg,.jpeg,.png">
-              <small class="mini">Escrituras, avalúos, etc.</small>
+              <label class="mini">Tipo de documento</label>
+              <select id="tipoDocHipotecario" class="input" disabled>
+                <option value="">Seleccione...</option>
+              </select>
+              <small class="mini">La lista se ajusta para préstamos hipotecarios.</small>
+            </div>
+            <div>
+              <label class="mini">Archivo (PDF/JPG/PNG)</label>
+              <input type="file"
+                     id="archivoDocHipotecario"
+                     class="input"
+                     accept=".pdf,.jpg,.jpeg,.png"
+                     disabled>
+              <small class="mini">Se permite un archivo por vez.</small>
             </div>
           </div>
+          <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="btnSubirDocHipotecario" class="btn" disabled>Subir documento</button>
+            <button type="button" id="btnVerDocsHipotecario" class="btn btn-light" disabled>📁 Ver documentos del cliente</button>
+          </div>
+          <div id="boxDocsHipotecario" class="mini" style="margin-top:6px;"></div>
         </div>
+
         <div class="modal__footer">
           <button class="btn" type="submit">Crear préstamo</button>
         </div>
@@ -430,6 +474,7 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
     </div>
   </div>
 </div>
+
 <div class="modal" id="modalVerPrestamo">
   <div class="modal__dialog">
     <div class="modal__header">
