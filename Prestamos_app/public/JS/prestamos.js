@@ -17,12 +17,16 @@
       catch (parseErr) { if ($err) { $err.hidden = false; $err.textContent = 'Respuesta no-JSON de la API:\n' + text.slice(0, 2000); } throw parseErr; }
     } catch (e) { if (!$err || ($err && $err.hidden)) { if ($err) { $err.hidden = false; $err.textContent = 'Error consultando API:\n' + (e.message || e); } else { console.error('Error consultando API:', e); } } throw e; }
   }
+
+  // -------------------------------
   // Catálogos y moneda
+  // -------------------------------
   const $selMoneda = document.getElementById('selMoneda');
   let MONEDAS = [];
   let PERIODOS = [];
   let AMORTIZACION = [];
   let GARANTIAS = [];
+
   async function cargarCatalogos() {
     const js = await jsonFetch(API, new URLSearchParams({ action: 'catalogos' }));
     MONEDAS = js.data?.monedas || [];
@@ -70,13 +74,214 @@
       }
     }
   }
+
+  // -------------------------------
   // Buscar/seleccionar cliente
+  // -------------------------------
   const $qC = document.getElementById('qCliente');
   const $btnBuscarC = document.getElementById('btnBuscarCliente');
   const $resC = document.getElementById('resClientes');
   const $boxInfoC = document.getElementById('boxInfoCliente');
   const $infoGrid = document.getElementById('infoClienteGrid');
   let CLIENTE = null;
+
+  // --- Configuración de documentos por tipo de préstamo ---
+
+  const DOC_TYPES_PERSONAL = [
+    { value: 'CEDULA',    label: 'Cédula / documento de identidad' },
+    { value: 'PASAPORTE', label: 'Pasaporte' },
+    { value: 'LICENCIA',  label: 'Licencia de conducir' },
+    { value: 'SEGURO',    label: 'Póliza de seguro (vehículo/vida)' },
+    { value: 'CONTRATO',  label: 'Contrato de préstamo personal' },
+    { value: 'OTRO',      label: 'Otro documento de respaldo' }
+  ];
+
+  const DOC_TYPES_HIPO = [
+    { value: 'CEDULA',   label: 'Cédula / documento de identidad' },
+    { value: 'SEGURO',   label: 'Seguro del inmueble' },
+    { value: 'CONTRATO', label: 'Contrato de préstamo hipotecario' },
+    { value: 'OTRO',     label: 'Otros documentos (título, tasación, etc.)' }
+  ];
+
+  const docPersonal = {
+    tipo: document.getElementById('tipoDocPersonal'),
+    archivo: document.getElementById('archivoDocPersonal'),
+    subir: document.getElementById('btnSubirDocPersonal'),
+    ver: document.getElementById('btnVerDocsPersonal'),
+    box: document.getElementById('boxDocsPersonal')
+  };
+
+  const docHipotecario = {
+    tipo: document.getElementById('tipoDocHipotecario'),
+    archivo: document.getElementById('archivoDocHipotecario'),
+    subir: document.getElementById('btnSubirDocHipotecario'),
+    ver: document.getElementById('btnVerDocsHipotecario'),
+    box: document.getElementById('boxDocsHipotecario')
+  };
+
+  function initDocSelect(doc, tipos) {
+    if (!doc.tipo) return;
+    doc.tipo.innerHTML = '<option value=\"\">Seleccione...</option>' +
+      tipos.map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+    doc.tipo.disabled = true;
+    if (doc.archivo) doc.archivo.disabled = true;
+    if (doc.subir) doc.subir.disabled = true;
+    if (doc.ver) doc.ver.disabled = true;
+    if (doc.box) doc.box.textContent = '';
+  }
+
+  initDocSelect(docPersonal,   DOC_TYPES_PERSONAL);
+  initDocSelect(docHipotecario, DOC_TYPES_HIPO);
+
+  function docsViewerUrl() {
+    if (!CLIENTE || !CLIENTE.id_cliente) return null;
+    return (window.APP_BASE || '/') + 'views/docs_cliente.php?id_cliente=' + encodeURIComponent(CLIENTE.id_cliente);
+  }
+
+  async function subirDocumentoClienteDesdePrestamo(tipo_archivo, file, destinoBox) {
+    if (!CLIENTE || !CLIENTE.id_cliente) {
+      alert('Primero selecciona un cliente.');
+      return;
+    }
+    if (!tipo_archivo) {
+      alert('Selecciona un tipo de documento.');
+      return;
+    }
+    if (!file) {
+      alert('Selecciona un archivo.');
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('action', 'upload_doc');
+    fd.append('id_cliente', CLIENTE.id_cliente);
+    fd.append('tipo_archivo', tipo_archivo);
+    fd.append('archivo', file);
+
+    // Info básica para nombres de archivos (opcional)
+    if (CLIENTE.nombre) {
+      const partes = CLIENTE.nombre.split(' ');
+      fd.append('nombre', partes[0] || CLIENTE.nombre);
+      fd.append('apellido', partes.slice(1).join(' ') || '');
+    }
+    if (CLIENTE.documento && CLIENTE.documento !== '-') {
+      fd.append('numero_documento', CLIENTE.documento);
+    }
+
+    const js = await jsonFetch(API_CLIENTES, fd);
+    if (!js.ok) {
+      throw new Error(js.msg || js.error || 'Error al subir el documento');
+    }
+
+    if (destinoBox) {
+      const url = docsViewerUrl();
+      destinoBox.innerHTML = `
+        <span>📎 Documento subido correctamente.</span>
+        ${url ? `<div class="docs-folder-link" style="margin-top:4px;">
+          <a href="${url}" target="_blank" class="btn btn-light btn-xs">📁 Ver documentos del cliente</a>
+        </div>` : ''}
+      `;
+    }
+
+    return js;
+  }
+
+  // Eventos UI documentos - Personal
+  if (docPersonal.tipo && docPersonal.archivo && docPersonal.subir) {
+    docPersonal.tipo.addEventListener('change', () => {
+      const hasTipo = !!docPersonal.tipo.value;
+      docPersonal.archivo.disabled = !hasTipo;
+      docPersonal.archivo.value = '';
+      docPersonal.subir.disabled = true;
+    });
+
+    docPersonal.archivo.addEventListener('change', () => {
+      const hasFile = docPersonal.archivo.files && docPersonal.archivo.files.length > 0;
+      docPersonal.subir.disabled = !(hasFile && docPersonal.tipo.value);
+    });
+
+    docPersonal.subir.addEventListener('click', async () => {
+      try {
+        const file = docPersonal.archivo.files[0];
+        docPersonal.subir.disabled = true;
+        await subirDocumentoClienteDesdePrestamo(docPersonal.tipo.value, file, docPersonal.box);
+        docPersonal.archivo.value = '';
+        docPersonal.subir.disabled = true;
+        alert('Documento subido correctamente.');
+      } catch (e) {
+        console.error(e);
+        alert(e.message || 'Error al subir el documento.');
+      }
+    });
+  }
+
+  if (docPersonal.ver) {
+    docPersonal.ver.addEventListener('click', () => {
+      const url = docsViewerUrl();
+      if (!url) {
+        alert('Primero selecciona un cliente.');
+        return;
+      }
+      window.open(url, '_blank');
+    });
+  }
+
+  // Eventos UI documentos - Hipotecario
+  if (docHipotecario.tipo && docHipotecario.archivo && docHipotecario.subir) {
+    docHipotecario.tipo.addEventListener('change', () => {
+      const hasTipo = !!docHipotecario.tipo.value;
+      docHipotecario.archivo.disabled = !hasTipo;
+      docHipotecario.archivo.value = '';
+      docHipotecario.subir.disabled = true;
+    });
+
+    docHipotecario.archivo.addEventListener('change', () => {
+      const hasFile = docHipotecario.archivo.files && docHipotecario.archivo.files.length > 0;
+      docHipotecario.subir.disabled = !(hasFile && docHipotecario.tipo.value);
+    });
+
+    docHipotecario.subir.addEventListener('click', async () => {
+      try {
+        const file = docHipotecario.archivo.files[0];
+        docHipotecario.subir.disabled = true;
+        await subirDocumentoClienteDesdePrestamo(docHipotecario.tipo.value, file, docHipotecario.box);
+        docHipotecario.archivo.value = '';
+        docHipotecario.subir.disabled = true;
+        alert('Documento subido correctamente.');
+      } catch (e) {
+        console.error(e);
+        alert(e.message || 'Error al subir el documento.');
+      }
+    });
+  }
+
+  if (docHipotecario.ver) {
+    docHipotecario.ver.addEventListener('click', () => {
+      const url = docsViewerUrl();
+      if (!url) {
+        alert('Primero selecciona un cliente.');
+        return;
+      }
+      window.open(url, '_blank');
+    });
+  }
+
+  function habilitarUI_docsParaCliente() {
+    [docPersonal, docHipotecario].forEach(doc => {
+      if (!doc.tipo) return;
+      doc.tipo.disabled = false;
+      if (doc.ver) doc.ver.disabled = false;
+      if (doc.box && CLIENTE) {
+        doc.box.innerHTML = `
+          <small class="mini">
+            Los documentos se guardarán en el expediente de <b>${CLIENTE.nombre}</b>.
+          </small>
+        `;
+      }
+    });
+  }
+
+  // ---- búsqueda clientes ----
   $qC?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); $btnBuscarC?.click(); }
   });
@@ -105,6 +310,7 @@
       </tbody></table>
     `;
   });
+
   document.getElementById('resClientes')?.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-sel]'); if (!b) return;
     const id_cliente = +b.dataset.sel;
@@ -164,7 +370,11 @@
     `;
     const icp = document.getElementById('id_cliente_personal'); if (icp) icp.value = CLIENTE.id_cliente;
     const ich = document.getElementById('id_cliente_hipo'); if (ich) ich.value = CLIENTE.id_cliente;
+
+    // habilitar controles de documentos ligados a este cliente
+    habilitarUI_docsParaCliente();
   });
+
   document.getElementById('btnAbrirCrearCliente')?.addEventListener('click', () => openModal(document.getElementById('modalCrearCliente')));
   document.getElementById('frmClienteQuick')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -173,6 +383,7 @@
     closeModal(document.getElementById('modalCrearCliente'));
     $btnBuscarC?.click();
   });
+
   // Abrir modales de solicitud
   document.getElementById('btnPrestamoPersonal')?.addEventListener('click', () => {
     const fp = document.getElementById('frmPersonal');
@@ -187,6 +398,7 @@
   });
   document.getElementById('btnMinPersonal')?.addEventListener('click', () => { });
   document.getElementById('btnMinHipotecario')?.addEventListener('click', () => { });
+
   // Envío solicitudes
   function withMoneda(fd) {
     fd.set('id_tipo_moneda', $selMoneda.value || '1');
@@ -210,6 +422,7 @@
     alert(`Préstamo creado: #${js.id_prestamo}\nContrato: ${js.numero_contrato || 'N/A'}`);
     cargarPrestamos(1);
   });
+
   function actualizarPorcentajeHipotecario() {
     const $m = document.getElementById('monto_hipo');
     const $v = document.getElementById('valor_inmueble');
@@ -325,6 +538,7 @@
     document.getElementById('verPrestamoContenido').innerHTML = html;
     openModal(document.getElementById('modalVerPrestamo'));
   });
+
   // Exportar Cronograma pdf
   document.getElementById('btnExportarCronograma')?.addEventListener('click', () => {
     const $content = document.getElementById('verPrestamoContenido');
@@ -369,6 +583,7 @@
     if (!js.ok) return alert(js.msg || 'Error');
     alert('Desembolso registrado');
   });
+
   // Recibo
   const $btnRecibo = document.getElementById('btnRecibo');
   $btnRecibo?.addEventListener('click', async () => {
@@ -395,4 +610,3 @@
     try { actualizarPorcentajeHipotecario(); } catch (_) { }
   })();
 })();
-

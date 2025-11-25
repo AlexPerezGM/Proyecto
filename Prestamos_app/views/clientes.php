@@ -16,7 +16,7 @@ $APP_BASE = $APP_BASE . (substr($APP_BASE,-1) === '/' ? '' : '/') ;
 
 // Ruta base para WAMP Siempre ban de ultimo
 $APP_BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
-$APP_BASE = preg_replace('#/views$#','', $APP_BASE);
+$APP_BASE = preg_replace('#/views$#', '', $APP_BASE);
 $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 
 // Cargar catálogos (género y tipo documento)
@@ -168,19 +168,21 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
     </div>
     
   </div>
-  <select id="genero" name="genero" class="input" required>
-  <option value="">Seleccione…</option>
-  <?php foreach ($catGeneros as $g): ?>
-    <option value="<?= $g['id_genero'] ?>"><?= htmlspecialchars($g['genero']) ?></option>
-  <?php endforeach ?>
-</select>
 
-<select id="id_tipo_documento" name="id_tipo_documento" class="input" required>
-  <option value="">Seleccione…</option>
-  <?php foreach ($tiposDoc as $t): ?>
-    <option value="<?= $t['id_tipo_documento'] ?>"><?= htmlspecialchars($t['tipo_documento']) ?></option>
-  <?php endforeach ?>
-</select>
+  <!-- (Estos selects sueltos venían del archivo original, los dejo igual) -->
+  <select id="genero" name="genero" class="input" required>
+    <option value="">Seleccione…</option>
+    <?php foreach ($catGeneros as $g): ?>
+      <option value="<?= $g['id_genero'] ?>"><?= htmlspecialchars($g['genero']) ?></option>
+    <?php endforeach ?>
+  </select>
+
+  <select id="id_tipo_documento" name="id_tipo_documento" class="input" required>
+    <option value="">Seleccione…</option>
+    <?php foreach ($catDocs as $t): ?>
+      <option value="<?= $t['id_tipo_documento'] ?>"><?= htmlspecialchars($t['tipo_documento']) ?></option>
+    <?php endforeach ?>
+  </select>
 
 
   <!-- Modales (crear/editar y ver) -->
@@ -195,26 +197,24 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
         <input type="hidden" name="action" value="create">
         <input type="hidden" name="id_cliente" id="id_cliente">
         
-        
-
         <div class="grid-2">
           <div>
             <label>Nombre *</label><input id="nombre" name="nombre" class="input" required>
             <label>Apellido *</label><input id="apellido" name="apellido" class="input" required>
             <label>Fecha de nacimiento *</label><input id="fecha_nacimiento" name="fecha_nacimiento" type="date" class="input" required>
             <label>Género *</label>
-            <select id="genero" name="genero" class="input" required>
+            <select id="genero_modal" name="genero" class="input" required>
               <option value="">Seleccione…</option>
-              <option value="1">Masculino</option>
-              <option value="2">Femenino</option>
-              <option value="3">Otro</option>
+              <?php foreach ($catGeneros as $g): ?>
+                <option value="<?= $g['id_genero'] ?>"><?= htmlspecialchars($g['genero']) ?></option>
+              <?php endforeach ?>
             </select>
             <label>Tipo de documento *</label>
-            <select id="id_tipo_documento" name="id_tipo_documento" class="input" required>
+            <select id="id_tipo_documento_modal" name="id_tipo_documento" class="input" required>
               <option value="">Seleccione…</option>
-              <option value="1">Cédula</option>
-              <option value="2">Pasaporte</option>
-              <option value="3">Licencia de conducir</option>
+              <?php foreach ($catDocs as $t): ?>
+                <option value="<?= $t['id_tipo_documento'] ?>"><?= htmlspecialchars($t['tipo_documento']) ?></option>
+              <?php endforeach ?>
             </select>
             <label>Número documento *</label><input id="numero_documento" name="numero_documento" class="input" required>
           </div>
@@ -223,7 +223,7 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
             <label>Teléfono *</label><input id="telefono" name="telefono" class="input" required>
             <label>Email *</label><input id="email" name="email" type="email" class="input" required>
             <label>Dirección:</label>
-           <div> </div>
+            <div></div>
             <label>Ciudad *</label><input id="ciudad" name="ciudad" class="input" required>
             <label>Sector *</label><input id="sector" name="sector" class="input" required>
             <label>Calle *</label><input id="calle" name="calle" class="input" required>
@@ -239,10 +239,42 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
           </div>
         </div>
 
+        <!-- Bloque nuevo: Documentación del cliente -->
+        <div class="docs-section">
+          <h4>Documentación del cliente</h4>
+          <p class="text-muted">
+            Sube cédula, pasaporte, licencia de conducir, seguro, contratos u otros documentos importantes.
+          </p>
+
+          <div class="docs-controls">
+            <label for="tipo_doc_cliente">Tipo de documento</label>
+            <select id="tipo_doc_cliente" class="input">
+              <option value="">Seleccione tipo…</option>
+              <option value="CEDULA">Cédula de identidad</option>
+              <option value="PASAPORTE">Pasaporte</option>
+              <option value="LICENCIA">Licencia de conducir</option>
+              <option value="SEGURO">Seguro / Póliza</option>
+              <option value="EXTRACTO">Extracto bancario</option>
+              <option value="CONTRATO">Contrato</option>
+              <option value="OTRO">Otro documento</option>
+            </select>
+          </div>
+
+          <div class="docs-controls">
+            <label for="archivo_doc">Archivo (PDF, JPG o PNG)</label>
+            <input type="file" id="archivo_doc" class="input"
+                   accept=".pdf,.jpg,.jpeg,.png" disabled>
+            <button type="button" id="btnSubirDoc" class="btn" disabled>Agregar documento</button>
+          </div>
+
+          <div id="boxDocs" class="docs-list">
+            <!-- Lista de documentos cargados por JS -->
+          </div>
+        </div>
+
         <div class="modal__footer">
           <button class="btn-light" type="button" data-close>Cancelar</button>
           <button class="btn" type="submit">Guardar</button>
-          
         </div>
       </form>
     </div>
@@ -260,6 +292,6 @@ $catDocs    = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_ti
 
   <!-- Variables y scripts -->
   <script>window.APP_BASE = "<?= $BASE_URL ?>";</script>
-  <script src="public/js/clientes.js?v=2"></script>
+  <script src="public/js/clientes.js?v=3"></script>
 </body>
 </html>
