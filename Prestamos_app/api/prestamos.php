@@ -1,4 +1,10 @@
 <?php
+// Evitar que warnings/errores impriman HTML y rompan respuestas JSON
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+error_reporting(E_ALL);
+// Bufferizar salida para poder limpiarla antes de enviar JSON
+if (!ob_get_level()) ob_start();
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
 
@@ -13,7 +19,14 @@ function dbh(){
   return null;
 }
 
-function out($arr){ echo json_encode($arr, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); exit; }
+function out($arr){
+  // Limpiar cualquier salida previa (warnings, HTML, etc.) para devolver sólo JSON
+  if (ob_get_length()) { @ob_clean(); }
+  header('Content-Type: application/json; charset=utf-8');
+  echo json_encode($arr, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  // Asegurarnos de terminar inmediatamente
+  exit;
+}
 
 $db = dbh();
 $act = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -138,7 +151,9 @@ if ($act==='crear_personal'){
     $fecha = date('Y-m-d');
   }
 
-  $row = $db->query("SELECT tasa_interes, monto_minimo FROM tipo_prestamo WHERE id_tipo_prestamo=1")->fetch_assoc();
+  $row = $db->query("SELECT tasa_interes, monto_minimo 
+  FROM tipo_prestamo 
+  WHERE id_tipo_prestamo=1")->fetch_assoc();
   $min = (float)($row['monto_minimo'] ?? 10000);
   $monto_dop = moneyDOP($db, $monto_user, $id_moneda);
   if ($monto_dop < $min) out(['ok'=>false,'msg'=>'Monto menor al mínimo establecido']);
@@ -163,6 +178,7 @@ if ($act==='crear_personal'){
     VALUES (?,?,?,?,?,?,2,?,1)",
                   [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond],'iisdsii');
     if(!$st) throw new Exception($err);
+   
     $id_p = $db->insert_id;
     
     q($db, "INSERT INTO prestamo_personal (id_prestamo,motivo) 
@@ -171,6 +187,29 @@ if ($act==='crear_personal'){
     list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
     if (!$ok) throw new Exception("Error al generar el cronograma: " . $e_cronograma);
     
+    $tipo_garantia = $_POST['tipo_garantia'] ?? '';
+    $descripcion = $_POST['descripcion_garantia'] ?? 'Garantia Personal';
+    $valor_estimado = $monto_dop;
+
+    if (!empty($tipo_garantia)){
+      [$st_g, $err_g] = q($db, "INSERT INTO garantia (id_prestamo, id_cliente, descripcion, valor) 
+      VALUES (?,?,?,?)",
+      [$id_p, $id_cliente, $descripcion, $valor_estimado], 'iisd');
+
+      if (!$st_g) throw new Exception("Error al guardar la garantia:". $err_g);
+      $id_garantia = $db->insert_id;
+
+      $res_tipo = $db->query("SELECT id_tipo_garantia FROM cat_tipo_garantia WHERE tipo_garantia = '$tipo_garantia_txt' LIMIT 1");
+      $row_tipo = $res_tipo->fetch_assoc();
+      $id_tipo_g = $row_tipo ? $row_tipo['id_tipo_garantia'] : 1;
+
+      [$st_dg, $err_dg] = q($db, "INSERT INTO detalle_garantia (id_garantia, id_tipo_garantia, descripcion, valor_estimado, estado_garantia)
+      VALUES (?,?,?,?, 'Activa')",
+      [$id_garantia, $id_tipo_g, $descripcion, $valor_estimado], 'iisd');
+
+      if (!$st_dg) throw new Exception("Error en detalle garantia:". $err_dg);
+    }
+
     $db->commit();
     out(['ok'=>true,'id_prestamo'=>$id_p,'numero_contrato'=>$num_contrato]);
   } catch (Exception $e) {
@@ -243,6 +282,23 @@ if ($act==='crear_hipotecario'){
     list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
     if (!$ok) throw new Exception("Error al generar el cronograma: " . $e_cronograma);
     
+    [$st_g, $err_g] = q($db, "INSERT INTO garantia (id_prestamo, id_cliente, descripcion, valor) 
+    VALUES (?,?,?,?)", 
+    [$id_p, $id_cliente, "Garantia Hipotecaria para $num_contrato", $valor_dop], 'iisd');
+
+    $id_garantia = $db->insert_id;
+
+    $res_tipo = $db->query("SELECT id_tipo_garantia FROM cat_tipo_garantia WHERE tipo_garantia
+     LIMIT 1");
+    $row_tipo = $res_tipo->fetch_assoc();
+    $id_tipo_g = $row_tipo ? $row_tipo['id_tipo_garantia'] : 1;
+
+    [$st_dg, $err_dg] = q($db, "INSERT INTO detalle_garantia (id_garantia, id_tipo_garantia, descripcion, valor_estimado, estado_garantia) 
+    VALUES (?,?,?,?, 'Activa')",
+    [$id_garantia, $id_tipo_g, $dir, $valor_dop], 'iisd');
+
+    if (!$st_dg) throw new Exception("Error en detalle garantia:". $err_dg);
+
     $db->commit();
     out(['ok'=>true,'id_prestamo'=>$id_p,'numero_contrato'=>$num_contrato]);
   } catch (Exception $e) {
@@ -495,6 +551,59 @@ if ($act==='recibo_html'){
   <?php
   exit;
 }
+if ($act === 'historial_cliente'){
+  $id_cliente = (int)($_POST['id_cliente'] ?? 0);
+  if ($id_cliente <= 0){
+    out(['ok' => false, 'msg' => 'ID de cliente inválido.']);
+  }
+
+  $sql_h = "
+    SELECT p.id_prestamo, p.numero_contrato, p.fecha_solicitud, p.monto_solicitado,
+           cep.estado,
+           (SELECT COUNT(*) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo AND cc.estado_cuota = 'Pendiente' AND cc.fecha_vencimiento < CURDATE()) AS cuotas_atrasadas
+    FROM prestamo p
+    LEFT JOIN cat_estado_prestamo cep ON cep.id_estado_prestamo = p.id_estado_prestamo
+    WHERE p.id_cliente = ?
+    ORDER BY p.creado_en DESC
+  ";
+
+  $st = $db->prepare($sql_h);
+  if (!$st) {
+    out(['ok' => false, 'msg' => 'Error preparando consulta: ' . $db->error]);
+  }
+  $st->bind_param('i', $id_cliente);
+  if (!$st->execute()) {
+    out(['ok' => false, 'msg' => 'Error ejecutando consulta: ' . $st->error]);
+  }
+  $prestamos = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+  $st->close();
+
+  $aplica_promo = false;
+  $mensaje_promo = 'El cliente no aplica para promociones actualmente.';
+
+  $tiene_atrasos = false;
+  $tiene_historial = count($prestamos) > 0;
+  foreach ($prestamos as $p) {
+    if (!empty($p['cuotas_atrasadas']) && $p['cuotas_atrasadas'] > 0) {
+      $tiene_atrasos = true;
+      break;
+    }
+  }
+  if (!$tiene_atrasos && $tiene_historial){
+    $aplica_promo = true;
+    $mensaje_promo = 'El cliente aplica para promociones especiales por buen historial de pagos.';
+  }
+
+  out([
+    'ok' => true,
+    'historial' => $prestamos,
+    'promocion' => [
+      'aplica' => $aplica_promo,
+      'mensaje' => $mensaje_promo
+    ]
+  ]);
+}
+
 // Catálogos individuales
 if ($act==='metodos'){
   $r = $db->query("SELECT id_tipo_pago AS id, tipo_pago AS txt FROM cat_tipo_pago")->fetch_all(MYSQLI_ASSOC);

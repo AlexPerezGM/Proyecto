@@ -3,9 +3,8 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $root = dirname(__DIR__);
-require_once $root . '/config/db.php'; // Debe exponer $conn (mysqli)
+require_once $root . '/config/db.php';
 
-/* -------- Helpers -------- */
 function rq(string $k, $def = null) {
   return $_POST[$k] ?? $def;
 }
@@ -25,7 +24,6 @@ if (!function_exists('column_exists')) {
   }
 }
 function bind_dynamic(mysqli_stmt $st, string $types, array &$params): void {
-  // mysqli::bind_param necesita referencias
   $refs = [];
   foreach ($params as $k => &$v) { $refs[$k] = &$v; }
   array_unshift($refs, $types);
@@ -99,14 +97,11 @@ if ($action === 'search') {
   ok(['ok'=>true,'data'=>$rows]);
 }
 
-/*
-   SUMMARY: resumen de préstamo + cuota actual + mora
- */
 if ($action === 'summary') {
   $id = num_or_null(rq('id_prestamo'));
   if (!$id) bad('id_prestamo inválido');
   // Datos principales del préstamo
-  $sql = "SELECT 
+$sql = "SELECT 
             p.id_prestamo,
             ce.estado,
             COALESCE(SUM(cu.saldo_cuota),0) AS saldo_total
@@ -123,7 +118,6 @@ if ($action === 'summary') {
   $resumen = $st->get_result()->fetch_assoc() ?: [];
   $st->close();
 
-  // Cuota actual (vencida o la siguiente pendiente)
   $sql = "SELECT 
             id_cronograma_cuota,
             numero_cuota,
@@ -147,7 +141,6 @@ if ($action === 'summary') {
   $cuota = $st->get_result()->fetch_assoc() ?: null;
   $st->close();
 
-  // Normalizar tipos numéricos de la cuota para que el frontend reciba números
   if ($cuota) {
     $cuota['numero_cuota'] = isset($cuota['numero_cuota']) ? (int)$cuota['numero_cuota'] : null;
     $cuota['capital']      = (float)($cuota['capital'] ?? 0);
@@ -174,8 +167,6 @@ if ($action === 'summary') {
     ]);
 } 
 
-/*  registra pago (efectivo/transferencia)
-   */
 if ($action === 'calc_mora') {
   $id = num_or_null(rq('id_prestamo')); if (!$id) bad('id_prestamo inválido');
   $st = $conn->prepare("SELECT COALESCE(SUM(cargos_cuota),0) AS mora_total
@@ -268,6 +259,10 @@ if ($action === 'pay'){
     $restante = $monto_dop;
     $cuotas_afectadas = 0;
     $numero_cuota = null;
+    
+    $total_capital_asignado = 0.0;
+    $total_interes_asignado = 0.0;
+    $total_cargos_asignado = 0.0;
 
     foreach ($cuotas as $c){
       if ($restante <= 0.009) break;
@@ -300,7 +295,6 @@ if ($action === 'pay'){
       $insert = $conn->prepare("INSERT INTO asignacion_pago (id_pago, id_cronograma_cuota, monto_asignado, tipo_asignacion)
                       VALUES (?,?,?,?)");
       
-
       $monto_a_cargos = 0.0;
       if($cargos_pendiente > 0 && $restante > 0){
         $monto_a_cargos = min($restante, $cargos_pendiente);
@@ -308,6 +302,7 @@ if ($action === 'pay'){
         $insert->bind_param('iids', $id_pago, $id_cuota, $monto_a_cargos, $tipo);
         $insert->execute();
         $restante -= $monto_a_cargos;
+        $total_cargos_asignado += (float)$monto_a_cargos;
       }
 
       $monto_a_interes = 0.0;
@@ -317,6 +312,7 @@ if ($action === 'pay'){
         $insert->bind_param('iids', $id_pago, $id_cuota, $monto_a_interes, $tipo);
         $insert->execute();
         $restante -= $monto_a_interes;
+        $total_interes_asignado += (float)$monto_a_interes;
       }
 
       $monto_a_capital = 0.0;
@@ -326,6 +322,7 @@ if ($action === 'pay'){
         $insert->bind_param('iids', $id_pago, $id_cuota, $monto_a_capital, $tipo);
         $insert->execute();
         $restante -= $monto_a_capital;
+        $total_capital_asignado += (float)$monto_a_capital;
       }
       $insert->close();
 
@@ -348,44 +345,28 @@ if ($action === 'pay'){
     }
     $conn->commit();
 
-    // ============================
-    // Datos del cliente y carpeta
-    // ============================
     $nombre = '';
     $apellido = '';
     $id_cliente = null;
     $numero_documento = '';
-
-    $st_p = $conn->prepare("SELECT 
-                                c.id_cliente,
-                                dp.nombre, 
-                                dp.apellido,
-                                di.numero_documento
+    $st_p = $conn->prepare("SELECT c.id_cliente, dp.nombre, dp.apellido, di.numero_documento
                             FROM prestamo p
-                            JOIN cliente c 
-                              ON c.id_cliente = p.id_cliente
-                            JOIN datos_persona dp 
-                              ON dp.id_datos_persona = c.id_datos_persona
-                            LEFT JOIN documento_identidad di
-                              ON di.id_datos_persona = dp.id_datos_persona
-                            WHERE p.id_prestamo = ? 
-                            LIMIT 1");
+                            JOIN cliente c ON c.id_cliente = p.id_cliente
+                            JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
+                            LEFT JOIN documento_identidad di ON di.id_datos_persona = dp.id_datos_persona
+                            WHERE p.id_prestamo = ? LIMIT 1");
     if ($st_p) {
       $st_p->bind_param('i', $id_prestamo);
       $st_p->execute();
       $r = $st_p->get_result()->fetch_assoc();
       if ($r) {
-        $id_cliente       = isset($r['id_cliente']) ? (int)$r['id_cliente'] : null;
-        $nombre           = $r['nombre'] ?? '';
-        $apellido         = $r['apellido'] ?? '';
+        $nombre = $r['nombre'] ?? '';
+        $apellido = $r['apellido'] ?? '';
+        $id_cliente = $r['id_cliente'] ?? null;
         $numero_documento = $r['numero_documento'] ?? '';
       }
       $st_p->close();
     }
-
-    // ============================
-    // Generar y guardar factura
-    // ============================
     if ($id_cliente !== null) {
       // Construir ruta base igual que en clientes: /uploads/clientes/{NUM_DOC_SANITIZADO} o CLI_{id_cliente}
       $num = preg_replace('/[^0-9A-Za-z]/', '', (string)$numero_documento);
@@ -402,67 +383,17 @@ if ($action === 'pay'){
       if (!is_dir($clienteDir)) {
         @mkdir($clienteDir, 0777, true);
       }
-
       // Carpeta específica del préstamo
       $prestamoDir = $clienteDir . '/PRESTAMO_' . $id_prestamo;
       if (!is_dir($prestamoDir)) {
         @mkdir($prestamoDir, 0777, true);
       }
-
-      // Contenido HTML de la factura
-      $clienteNombreCompleto = trim($nombre . ' ' . $apellido);
-      $clienteNombreCompleto = htmlspecialchars($clienteNombreCompleto, ENT_QUOTES, 'UTF-8');
-      $cedulaHtml            = htmlspecialchars((string)$numero_documento, ENT_QUOTES, 'UTF-8');
-      $metodoHtml            = htmlspecialchars($metodo, ENT_QUOTES, 'UTF-8');
-      $monedaHtml            = htmlspecialchars($moneda_nombre, ENT_QUOTES, 'UTF-8');
-      $refHtml               = htmlspecialchars($ref, ENT_QUOTES, 'UTF-8');
-      $obsHtml               = htmlspecialchars($obs, ENT_QUOTES, 'UTF-8');
-      $fechaEmision          = date('Y-m-d H:i');
-
-      $htmlFactura = "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n".
-        "<meta charset=\"utf-8\" />\n".
-        "<title>Factura de Pago #{$id_pago}</title>\n".
-        "<style>\n".
-        "body { font-family: Arial, sans-serif; margin: 20px; }\n".
-        "h1, h2 { margin-bottom: 5px; }\n".
-        "table { border-collapse: collapse; width: 100%; margin-top: 15px; }\n".
-        "th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }\n".
-        "th { background: #f5f5f5; }\n".
-        ".totales { margin-top: 15px; }\n".
-        "</style>\n".
-        "</head>\n<body>\n".
-        "<h2>Factura de Pago</h2>\n".
-        "<p><strong>No. de factura:</strong> {$id_pago}</p>\n".
-        "<p><strong>Fecha de emisión:</strong> {$fechaEmision}</p>\n".
-        "<hr />\n".
-        "<h3>Datos del cliente</h3>\n".
-        "<p><strong>Nombre:</strong> {$clienteNombreCompleto}<br />\n".
-        "<strong>Cédula / Documento:</strong> {$cedulaHtml}</p>\n".
-        "<h3>Datos del préstamo</h3>\n".
-        "<p><strong>ID Préstamo:</strong> {$id_prestamo}<br />\n".
-        "<strong>Número de cuota afectada (última):</strong> ".htmlspecialchars((string)$numero_cuota, ENT_QUOTES, 'UTF-8')."</p>\n".
-        "<h3>Detalle del pago</h3>\n".
-        "<table>\n".
-        "<tr><th>Método</th><td>{$metodoHtml}</td></tr>\n".
-        "<tr><th>Moneda</th><td>{$monedaHtml}</td></tr>\n".
-        "<tr><th>Monto en moneda original</th><td>{$monto}</td></tr>\n".
-        "<tr><th>Monto en DOP</th><td>{$monto_dop}</td></tr>\n".
-        "<tr><th>Referencia</th><td>{$refHtml}</td></tr>\n".
-        "<tr><th>Observación</th><td>{$obsHtml}</td></tr>\n".
-        "<tr><th>Cuotas afectadas</th><td>{$cuotas_afectadas}</td></tr>\n".
-        "<tr><th>Monto aplicado a capital (última cuota)</th><td>{$pagado_capital}</td></tr>\n".
-        "<tr><th>Monto aplicado a interés (última cuota)</th><td>{$pagado_interes}</td></tr>\n".
-        "<tr><th>Monto aplicado a mora/cargos (última cuota)</th><td>{$pagado_cargos}</td></tr>\n".
-        "</table>\n".
-        "<p class=\"totales\">Gracias por su pago.</p>\n".
-        "</body>\n</html>";
-
-      $facturaFilename = 'FACTURA_PAGO_' . $id_pago . '_' . date('Ymd_His') . '.html';
-      $facturaPath     = $prestamoDir . '/' . $facturaFilename;
+      $facturaFilename = 'FACTURA_PAGO_' . $id_pago . '_' . date('Ymd_his') . '.html';
+      $facturaPath = $prestamoDir . '/' . $facturaFilename;
 
       @file_put_contents($facturaPath, $htmlFactura);
-      // Si por alguna razón no se puede guardar, no rompemos el flujo del pago.
-    }
+
+  }
 
     ok(['ok'=>true,
         'id_pago'=>$id_pago,
@@ -479,9 +410,9 @@ if ($action === 'pay'){
           'numero_cuota'=>$numero_cuota,
           'nombre'=>$nombre,
           'apellido'=>$apellido,
-          'capital' =>$pagado_capital,
-          'interes' =>$pagado_interes,
-          'mora' =>$pagado_cargos
+          'capital' => (float) $total_capital_asignado,
+          'interes' => (float) $total_interes_asignado,
+          'mora' => (float) $total_cargos_asignado
         ]
       ]);
   } catch (Exception $e) {
@@ -490,15 +421,10 @@ if ($action === 'pay'){
   }
 }
 
-/*
-   GARANTÍA: por ahora no implementado → se deshabilita en UI */
 if ($action === 'garantia') {
   bad('El uso de garantía aún no está implementado en este módulo.');
 }
 
-/*
-   CLOSE: cerrar préstamo si saldo total = 0
- */
 if ($action === 'close') {
   $id = num_or_null(rq('id_prestamo')); if (!$id) bad('id_prestamo inválido');
   $obs = (string)rq('observacion','');

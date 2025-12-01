@@ -5,13 +5,11 @@ require_once __DIR__ . '/../config/db.php';
 function j($arr){ echo json_encode($arr, JSON_UNESCAPED_UNICODE); exit; }
 $action = $_POST['action'] ?? $_REQUEST['action'] ?? '';
 
-// DEBUG: si no llega acción, devolver información útil para diagnóstico
 if (!$action) {
-  // recolectar cabeceras y cuerpo crudo
   $headers = [];
   foreach (getallheaders() as $k => $v) $headers[$k] = $v;
   $raw = file_get_contents('php://input');
-  out([
+  j([
     'ok' => false,
     'debug' => true,
     'msg' => 'No action received',
@@ -49,6 +47,22 @@ function getStr($k,$d=''){ return isset($_REQUEST[$k]) ? trim($_REQUEST[$k]) : $
 function table_has_column($conn, $table, $column){
   $rs = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($column) . "'");
   return $rs ? $rs->num_rows > 0 : false;
+}
+
+function validarCedula($cedula){
+  $cedula = preg_replace('/[^0-9]/', '', $cedula);
+  if (strlen($cedula) !== 11) return false;
+
+  $multiplicadores = [1,2,1,2,1,2,1,2,1,2,1];
+  $suma = 0;
+
+  for ($i = 0; $i < 11; $i++) {
+    $n = $cedula[$i] * $multiplicadores[$i];
+    if ($n >= 10) $n = ($n % 10) + intdiv($n, 10);
+    $suma += $n;
+  }
+
+  return ($suma % 10) == 0;
 }
 
 function datos_basicos_empleado($conn, int $id_empleado){
@@ -242,6 +256,7 @@ if ($action === 'ajuste_list'){
     $st->close();
     j(['ok'=>true, 'data'=>$data]);
 }
+
 if ($action === 'ajuste_crear_actualizar'){
   $id_empleado = getInt('id_empleado');
   $id_ajuste_empleado = getInt('id_ajuste_empleado');
@@ -342,6 +357,15 @@ if ($action === 'emp_list'){
   j(['ok'=>true,'data'=>$data,'total'=>$tot]);
 }
 
+if ($action === 'validarCedula'){
+  $cedula_raw = $_POST['cedula'] ?? '';
+  $cedula = preg_replace('/[^0-9]/', '', $cedula_raw);
+  if (!validarCedula($cedula)){
+    j(['ok' => false, 'msg' => 'Formato de cedula incorrecto']);
+  }
+  j(['ok' => true, 'data' => $cedula]);
+}
+
 if ($action === 'emp_get'){
   $id = getInt('id_empleado');
   if(!$id) j(['ok'=>false,'msg'=>'id_empleado requerido']);
@@ -385,6 +409,12 @@ if ($action === 'emp_create' || $action === 'emp_update'){
   $fecha_contratacion=getStr('fecha_contratacion'); 
   $salario_base=(float)getStr('salario_base'); 
   $id_jefe = strlen(getStr('id_jefe')) ? getInt('id_jefe') : null;
+  
+  $cedula_raw = $_POST['numero_documento'] ?? '';
+  $cedula = preg_replace('/[^0-9]/', '', $cedula_raw);
+  if (!validarCedula($cedula)) {
+    j(['ok'=>false, 'msg'=>'Cédula inválida']);
+  }
 
   $conn->begin_transaction();
   try{
@@ -459,7 +489,8 @@ if ($action === 'emp_create' || $action === 'emp_update'){
           $st->execute(); 
           $st->close();
         } else {
-          $st=$conn->prepare("INSERT INTO documento_identidad (id_datos_persona,id_tipo_documento,numero_documento,fecha_emision) VALUES (?,?,?,CURDATE())");
+          $st=$conn->prepare("INSERT INTO documento_identidad (id_datos_persona,id_tipo_documento,numero_documento,fecha_emision) 
+          VALUES (?,?,?,CURDATE())");
           $st->bind_param('iis',$id_dp,$id_tipo_documento,$numero_documento); 
           $st->execute(); 
           $st->close();
@@ -551,7 +582,16 @@ if ($action === 'horas_extras_g'){
   $items = $_POST['items'] ?? [];
   if (!$periodo) j(['ok'=>false,'msg'=>'Periodo requerido']);
 
-  // Fecha de registro para las horas extra (usar fecha actual)
+  $c_periodo = date('Y-m');
+
+  if ($periodo > $c_periodo){
+    j(['ok'=>false, 'msg'=>'No se pueden registrar horas a un periodo futuro']);
+  }
+
+  $resConf = $conn->query("SELECT valor_decimal FROM configuracion 
+  WHERE nombre_configuracion = 'precio_horas_extra' LIMIT 1");
+  $precioHora = $resConf && $resConf->num_rows > 0 ? (float)$resConf->fetch_assoc()['valor_decimal'] : 0.00;
+  
   $fecha = date('Y-m-d');
 
   $conn->begin_transaction();
@@ -560,18 +600,19 @@ if ($action === 'horas_extras_g'){
     WHERE id_empleado = ? 
     AND DATE_FORMAT(fecha, '%Y-%m') = ?");
     $stIns = $conn->prepare("INSERT INTO horas_extras (id_empleado, cantidad_horas, pago_horas_extras, monto_total, fecha)
-    VALUES (?,1,?,?,?)");
+    VALUES (?,?,?,?,?)");
 
     foreach($items as $item){
       $id = (int)$item['id_empleado'];
-      $monto = (float)$item['monto'];
+      $cantidadHoras = (float)$item['monto'];
 
-      $stDel->bind_param('is', $id, $periodo);
-      $stDel->execute();
-
-      if ($monto > 0){
+      if ($cantidadHoras > 0){
         // pago_horas_extras y monto_total guardan el mismo valor aquí
-        $stIns->bind_param('idds', $id, $monto, $monto, $fecha);
+        $stDel->bind_param('is', $id, $periodo);
+        $stDel->execute();
+
+        $montoTotal = $cantidadHoras * $precioHora;
+        $stIns->bind_param('iddds', $id, $cantidadHoras, $precioHora, $montoTotal, $fecha);
         $stIns->execute();
       }
     }
@@ -588,12 +629,17 @@ if ($action === 'nomina_preview'){
   $id_emp = getStr('id_empleado','ALL');
   if(!$periodo) j(['ok'=>false,'msg'=>'Periodo requerido']);
   $periodoSQL = $conn->real_escape_string($periodo);
-  if ($conn->multi_query("CALL generar_nomina_empleado('".$periodoSQL."')")){
+  try {
+    if (!$conn->multi_query("CALL generar_nomina_empleado('".$periodoSQL."')")) {
+      throw new Exception('Error al ejecutar procedimiento de nómina: ' . $conn->error);
+    }
     do {
       if ($res = $conn->store_result()) { $res->free(); }
     } while ($conn->more_results() && $conn->next_result());
-  } else {
-    j(['ok'=>false,'msg'=>'Error al ejecutar procedimiento de nómina']);
+  } catch (mysqli_sql_exception $e) {
+    j(['ok'=>false,'msg'=>'Error en procedimiento de nómina (mysqli): '.$e->getMessage(), 'db_error'=>$conn->error]);
+  } catch (Exception $e) {
+    j(['ok'=>false,'msg'=>'Error en procedimiento de nómina: '.$e->getMessage(), 'db_error'=>$conn->error]);
   }
 
   $rsNom = $conn->query("SELECT id_nomina FROM nomina WHERE periodo='$periodoSQL'")->fetch_assoc();
@@ -640,7 +686,10 @@ if ($action === 'nomina_save'){
 
   $periodoSQL = $conn->real_escape_string($periodo);
   $row = null;
-  if ($conn->multi_query("CALL generar_nomina_empleado('".$periodoSQL."')")){
+  try {
+    if (!$conn->multi_query("CALL generar_nomina_empleado('".$periodoSQL."')")) {
+      throw new Exception('Error al ejecutar procedimiento de nómina: ' . $conn->error);
+    }
     if ($res = $conn->store_result()){
       $row = $res->fetch_assoc();
       $res->free();
@@ -649,57 +698,106 @@ if ($action === 'nomina_save'){
       if ($res = $conn->store_result()) { $res->free(); }
     }
     j(['ok'=> true, 'id_nomina' => $row['id_nomina'] ?? null]);
-  } else {
-    j(['ok'=> false, 'msg' => 'Error al generar la nomina']);
+  } catch (mysqli_sql_exception $e) {
+    j(['ok'=>false,'msg'=>'Error al generar la nómina (mysqli): '.$e->getMessage(), 'db_error'=>$conn->error]);
+  } catch (Exception $e) {
+    j(['ok'=>false,'msg'=>'Error al generar la nómina: '.$e->getMessage(), 'db_error'=>$conn->error]);
   }
 }
 
 if ($action === 'nomina_comprobantes'){
   $periodo = getStr('periodo');
-  $rs = $conn->query("SELECT id_nomina FROM nomina WHERE periodo='".$conn->real_escape_string($periodo)."'")->fetch_assoc();
+  $id_empleado = getStr('id_empleado');
+
+  $rs = $conn->query("SELECT id_nomina 
+  FROM nomina 
+  WHERE periodo='".$conn->real_escape_string($periodo)."'")->fetch_assoc();
   if(!$rs) j(['ok'=>false,'msg'=>'No hay nómina para ese periodo']);
+
   $id_nomina = (int)$rs['id_nomina'];
-  $rows = $conn->query("
-    SELECT ne.*, CONCAT(dp.nombre,' ',dp.apellido) AS nombre, c.cargo
+
+  $sql = "SELECT ne.*, CONCAT(dp.nombre,' ',dp.apellido) AS nombre, c.cargo, dp.id_datos_persona
     FROM nomina_empleado ne
     JOIN empleado e ON e.id_empleado=ne.id_empleado
     JOIN datos_persona dp ON dp.id_datos_persona=e.id_datos_persona
     LEFT JOIN contrato_empleado c ON c.id_empleado=e.id_empleado AND c.vigente=1
-    WHERE ne.id_nomina=$id_nomina
-    ORDER BY nombre
-  ")->fetch_all(MYSQLI_ASSOC) ?? [];
+    WHERE ne.id_nomina=$id_nomina ";
+
+    if ($id_empleado > 0) {
+      $sql .= " AND ne.id_empleado= " . $id_empleado;
+    }
+    $sql .= " ORDER BY nombre";
+    $rows = $conn->query($sql)->fetch_all(MYSQLI_ASSOC) ?? [];
+
+    if (empty($rows)) 
+      j(['ok'=>false, 'msg'=>'No se encontraron empleados']);
+    
   ob_start();
-  echo "<html><head><meta charset='utf-8'><title>Comprobantes $periodo</title></head><body>";
+  echo "<html><head><meta charset='utf-8'><title>Comprobante $periodo</title>
+  <style>
+    body { font-family: sans-serif; font-size: 14px;}
+    .recibo { border:1px solid #333; padding:20px; margin:20px auto; max-width: 800px; border-radius:8px;}
+    .header { text-align: center; border-bottom: 2px solid #ddd; margin-bottom: 15px; padding-bottom; 10px;}
+    .row { display: flex; justify-content: space-between; margin-bottom: 5px;}
+    .total { font-weight: bold; font-size: 16px; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;}
+  </style>
+  </head><body>";
+  
   foreach($rows as $r){
     $idNE = (int)$r['id_nomina_empleado'];
     $idEmp = (int)$r['id_empleado'];
     $sb = (float)$r['salario_base'];
+
     $hx = 0.0; $bo = 0.0; $dd = 0.0;
+
     $hxRow = $conn->query("SELECT SUM(monto_total) AS total 
     FROM horas_extras 
     WHERE id_empleado=$idEmp 
     AND DATE_FORMAT(fecha, '%Y-%m')='".$conn->real_escape_string($periodo)."'")->fetch_assoc();
-    if ($hxRow && $hxRow['total']!==null) $hx = (float)$hxRow['total'];
+    if ($hxRow && $hxRow['total']!==null) 
+      $hx = (float)$hxRow['total'];
 
     $boRow = $conn->query("SELECT SUM(monto) AS total 
     FROM beneficios_empleado 
     WHERE id_nomina_empleado=$idNE")->fetch_assoc();
-    if ($boRow && $boRow['total']!==null) $bo = (float)$boRow['total'];
+    if ($boRow && $boRow['total']!==null) 
+      $bo = (float)$boRow['total'];
     
     $ddRow = $conn->query("SELECT SUM(monto) AS total 
     FROM deducciones_empleado 
     WHERE id_nomina_empleado=$idNE")->fetch_assoc();
-    if ($ddRow && $ddRow['total']!==null) $dd = (float)$ddRow['total'];
+    if ($ddRow && $ddRow['total']!==null) 
+      $dd = (float)$ddRow['total'];
+
     $neto = $sb + $hx + $bo - $dd;
-    echo "<html><div style='border:1px solid #ddd;padding:12px;margin:10px 0;border-radius:8px;'>
-      <h3 style='margin:0 0 8px 0;'>Comprobante de pago — $periodo</h3>
-      <p><b>Empleado:</b> {$r['nombre']} — {$r['cargo']}</p>
-      <p><b>Salario base:</b> $".number_format($sb,2)."</p>
-      <p><b>Horas extra:</b> $".number_format($hx,2)."</p>
-      <p><b>Bonificaciones:</b> $".number_format($bo,2)."</p>
-      <p><b>Deducciones:</b> $".number_format($dd,2)."</p>
-      <p><b>Salario neto:</b> $".number_format($neto,2)."</p>
-    </div>";
+
+    echo "
+    <div class='recibo'>
+      <div class='header'>
+        <h3 style='margin:0;'>Comprobante de pago</h3>
+        <small>Periodo: $periodo</small>
+      </div>
+      <div class='row'>
+        <span><b>Empleado:</b> {$r['nombre']}</span>
+        <span><b>Cargo:</b> {$r['cargo']}</span>
+      </div>
+      <hr style='border:0; border-top:1px dashed #ccc;'>
+      <div class='row'><span>Salario Base:</span><span>".number_format($sb,2)."</span></div>
+      <div class='row'><span>Horas Extras:</span><span>".number_format($hx,2)."</span></div>
+      <div class='row'><span>Bonificaciones:</span><span>".number_format($bo,2)."</span></div>
+      <div class='row'><span>Deducciones:</span><span>".number_format($dd,2)."</span></div>
+      <div class='row total'>
+        <span>Total Neto a pagar:</span>
+        <span>".number_format($neto,2)."</span>
+      </div>
+      <br>
+      <div style='text-align:center; margin-top:30px;'>
+        __________________________<br>
+        Firma
+      </div>
+      <div style='page-break-after:always;'></div>
+    </div>
+    ";
   }
   echo "<script>window.onload=()=>window.print();</script></body></html>";
   $html = ob_get_clean();
