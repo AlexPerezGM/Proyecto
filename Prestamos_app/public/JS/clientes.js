@@ -78,6 +78,7 @@
       throw e;
     }
   }
+
   async function verificarTerceros() {
     const numDoc = $inpDoc.value.trim();
     const tipoDoc = $selTipoDoc.value;
@@ -129,6 +130,7 @@
       console.error('Error verificando persona: ', e)
     }
   }
+
   if ($inpDoc) {
     $inpDoc.addEventListener('blur', verificarTerceros);
   }
@@ -148,6 +150,7 @@
     }
   }
   document.addEventListener('DOMContentLoaded', cargarCatalogos);
+
   // Documentos del cliente
   function resetDocsUIForCreate() {
     if (!$tipoDocCliente || !$archivoDoc || !$btnSubirDoc || !$boxDocs) return;
@@ -158,6 +161,8 @@
     $archivoDoc.value = '';
     // En registro, el doc se sube al guardar (no con el botón)
     $btnSubirDoc.disabled = true;
+    // Limpiar cualquier botón de abrir documentos que haya quedado de una edición previa
+    $boxDocs.innerHTML = '';
   }
 
   function prepareDocsUIForEdit(idCliente) {
@@ -168,43 +173,34 @@
     $archivoDoc.disabled = true;
     $archivoDoc.value = '';
     $btnSubirDoc.disabled = true;
-    $boxDocs.innerHTML = '<p>Cargando documentos…</p>';
-    cargarDocumentos(idCliente);
-  }
 
-  async function cargarDocumentos(id_cliente) {
-    if (!$boxDocs) return;
-    const res = await jsonFetch(API, new URLSearchParams({
-      action: 'list_docs',
-      id_cliente
-    }));
+    // ÚNICAMENTE mostrar el botón "Abrir documentos del cliente"
+    // debajo del botón "Agregar documento"
+    const viewerUrl = (window.APP_BASE || '/') +
+      'views/docs_cliente.php?id_cliente=' + encodeURIComponent(idCliente);
 
-    if (!res.ok) {
-      $boxDocs.innerHTML = '<p>Error cargando documentos</p>';
-      return;
-    }
-    let html = '';
-    // En vez de abrir el índice feo de Apache, abrimos un visor bonito
-    const viewerUrl = (window.APP_BASE || '/') + 'views/docs_cliente.php?id_cliente=' + encodeURIComponent(id_cliente);
-    html += `
+    $boxDocs.innerHTML = `
       <div class="docs-folder-link">
-        <a href="${viewerUrl}" target="_blank" class="btn btn-light">
+        <button type="button" id="btnAbrirDocsCliente" class="btn btn-light">
           Abrir documentos del cliente
-        </a>
+        </button>
       </div>
     `;
-    const files = Array.isArray(res.files) ? res.files : [];
-    if (files.length === 0) {
-      html += '<p>No hay documentos cargados.</p>';
-    } else {
-      html += files.map(f => `
-        <div class="doc-item">
-          <span>${f.nombre}</span>
-          <a href="${f.ruta}" target="_blank" class="btn btn-light">Ver</a>
-        </div>
-      `).join('');
+
+    const btnAbrir = document.getElementById('btnAbrirDocsCliente');
+    if (btnAbrir) {
+      btnAbrir.addEventListener('click', () => {
+        window.open(viewerUrl, '_blank');
+      });
     }
-    $boxDocs.innerHTML = html;
+  }
+
+  // Ya no se usa para listar archivos, se deja por compatibilidad si lo necesitas luego
+  async function cargarDocumentos(id_cliente) {
+    if (!$boxDocs) return;
+    // Si en el futuro quieres hacer validaciones con la API (action: 'list_docs'),
+    // puedes reusar esta función, pero por ahora no mostramos listado.
+    return;
   }
 
   async function subirDocumentoCliente(idCliente, tipo, file, extraData = {}) {
@@ -267,12 +263,13 @@
         await subirDocumentoCliente(idCliente, $tipoDocCliente.value, $archivoDoc.files[0]);
         $archivoDoc.value = '';
         $btnSubirDoc.disabled = true;
-        cargarDocumentos(idCliente);
+        // Ya no recargamos listado de documentos, solo dejamos el botón de abrir carpeta
       } catch (e) {
         alert(e.message);
       }
     });
   }
+
   // Listado principal
   async function cargar(page = 1) {
     currentPage = page;
