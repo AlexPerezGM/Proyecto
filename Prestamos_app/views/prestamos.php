@@ -103,20 +103,12 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
       </a>
     </div>
   </div>
-
-  <div class="sidebar-footer">
-    <a class="nav-link footer-link"
-       href="<?= $APP_BASE ?>views/perfil.php">
-      <span class="nav-icon">👤</span>
-      <span class="nav-text">Mi Perfil</span>
-    </a>
-  </div>
 </aside>
   <main class="content-area">
     <header class="topbar topbar-light">
       <div class="topbar-left">
         <div class="brand-inline">
-          <span class="brand-logo">🏦</span>
+          <span class="brand-logo">💼</span>
           <span class="brand-name">Control de Préstamos</span>
         </div>
         <span class="range-pill">Gestión de solicitudes, lista y desembolsos de préstamos</span>
@@ -261,20 +253,87 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
       <form id="frmClienteQuick">
         <input type="hidden" name="action" value="create">
         <div class="grid-2">
-          <div><label class="mini">Nombre</label><input class="input" name="nombre" required></div>
-          <div><label class="mini">Apellido</label><input class="input" name="apellido" required></div>
-          <div><label class="mini">Fecha nac.</label><input class="input" type="date" name="fecha_nacimiento" required></div>
-          <div><label class="mini">Género</label>
-            <select class="input" name="genero">
-              <option value="1">Masculino</option>
-              <option value="2">Femenino</option>
-              <option value="3">Otro</option>
+         <div>
+            <label style="font-weight: bold; font-size: 15px;">Nombre</label>
+            <input id="nombre" name="nombre" class="input" placeholder="Ingrese nombre" required>
+            <label style="font-weight: bold; font-size: 15px;">Apellido</label>
+            <input id="apellido" name="apellido" class="input" placeholder="Ingrese apellido" required>
+            <label style="font-weight: bold; font-size: 15px;">Fecha de nacimiento</label>
+            <input id="fecha_nacimiento" name="fecha_nacimiento" type="date" class="input" required>
+            <label style="font-weight: bold; font-size: 15px;">Tipo de documento</label>
+            <select id="id_tipo_documento_modal" name="id_tipo_documento" class="input" required>
+              <option value="">Seleccione…</option>
+              <?php foreach ($catDocs as $t): ?>
+                <option value="<?= $t['id_tipo_documento'] ?>"><?= htmlspecialchars($t['tipo_documento']) ?></option>
+              <?php endforeach ?>
+            </select>
+            <label style="font-weight: bold; font-size: 15px;">Número documento</label>
+            <input id="numero_documento" name="numero_documento" class="input" placeholder="0-0000000-0" required>
+            <label style="font-weight: bold; font-size: 15px;">Género</label>
+            <select id="genero_modal" name="genero" class="input" required>
+              <option value="">Seleccione…</option>
+              <?php foreach ($catGeneros as $g): ?>
+                <option value="<?= $g['id_genero'] ?>"><?= htmlspecialchars($g['genero']) ?></option>
+              <?php endforeach ?>
             </select>
           </div>
-          <div><label class="mini">Documento</label><input class="input" name="numero_documento" required></div>
-          <div><label class="mini">Teléfono</label><input class="input" name="telefono"></div>
-          <div><label class="mini">Email</label><input class="input" type="email" name="email"></div>
-          <div><label class="mini">Ingresos mensuales</label><input class="input" type="number" step="0.01" name="ingresos_mensuales"></div>
+
+          <div>
+            <label style="font-weight: bold; font-size: 15px;" >Teléfono</label>
+            <input id="telefono" name="telefono" class="input" placeholder="809-555-5555" required>
+            <label style="font-weight: bold; font-size: 15px;" >Email</label>
+            <input id="email" name="email" type="email" class="input" placeholder="correo@ejemplo.com" required>
+            <div color = "Green" >
+              <div style="margin-bottom: 5px;">
+              <label style="font-weight: bold; font-size: 15px;">Dirección:</label>
+              </div>
+              <label style="font-weight: bold; font-size: 15px;">Ciudad</label>
+              <input id="ciudad" name="ciudad" class="input" placeholder="Ingrese ciudad" required>
+              <label style="font-weight: bold; font-size: 15px;">Sector</label>
+              <input id="sector" name="sector" class="input" placeholder="Ingrese sector" required>
+              <label style="font-weight: bold; font-size: 15px;">Calle</label>
+              <input id="calle" name="calle" class="input" placeholder="Ingrese numero de calle" required>
+              <label style="font-weight: bold; font-size: 15px;">Número casa</label>
+              <input id="numero_casa" name="numero_casa" class="input" placeholder="Ingrese número de casa" required>
+            </div>
+          </div>
+          <div>
+            <label style="font-weight: bold; font-size: 15px;">Ingresos mensuales</label>
+            <input id="ingresos_mensuales" name="ingresos_mensuales" class="input" placeholder="Ingresos mensuales" required>
+            <label style="font-weight: bold; font-size: 15px;">Fuente de ingresos</label>
+            <input id="fuente_ingresos" name="fuente_ingresos" class="input" placeholder="Fuente de ingresos" required>
+            <label style="font-weight: bold; font-size: 15px;">Egresos mensuales</label>
+            <input id="egresos_mensuales" name="egresos_mensuales" class="input" placeholder="Egresos mensuales" required>
+            <label style="font-weight: bold; font-size: 15px;">Ocupación</label>
+            <input id="ocupacion" name="ocupacion" class="input" placeholder="Ocupación" required>
+            <label style="font-weight: bold; font-size: 15px;">Empresa</label>
+            <input id="empresa" name="empresa" class="input" placeholder="Empresa" required>
+          </div>
+        </div>
+        <div class="docs-section">
+          <h4>Documentación del cliente</h4>
+          <div class="docs-controls">
+            <label for="tipo_doc_cliente">Tipo de documento</label>
+            <select id="tipo_doc_cliente" class="input">
+              <option value="">Seleccione tipo…</option>
+              <option value="CEDULA">Cédula de identidad</option>
+              <option value="PASAPORTE">Pasaporte</option>
+              <option value="LICENCIA">Licencia de conducir</option>
+              <option value="EXTRACTO">Extracto bancario</option>
+              <option value="CONTRATO">Cronograma de cuotas</option>
+              <option value="OTRO">Otro documento</option>
+            </select>
+          </div>
+          
+          <div class="docs-controls" style="margin-top: 10px">
+            <label for="archivo_doc">Archivo (PDF, JPG o PNG)</label>
+            <input type="file" id="archivo_doc" class="input"
+                   accept=".pdf,.jpg,.jpeg,.png" disabled>
+            <button type="button" id="btnSubirDoc" class="btn" style="margin-top: 10px" disabled>Agregar documento</button>
+          </div>
+          <div id="boxDocs" class="docs-list">
+            <!-- Lista de documentos cargados por JS -->
+          </div>
         </div>
         <div class="modal__footer">
           <button class="btn" type="submit">Guardar</button>
@@ -319,6 +378,10 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
           <div>
             <label class="mini">Tipo de garantía</label>
             <select class="input" name="tipo_garantia" id="garantia_personal" required></select>
+          </div>
+          <div>
+            <label class="mini">Descripcion de la garantia</label>
+            <input class="input" name="descripcion_garantia" placeholder="Describa la garantia">
           </div>
           <div>
             <label class="mini">Frecuencia de pagos</label>

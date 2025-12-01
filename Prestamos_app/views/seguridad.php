@@ -116,17 +116,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       </a>
     </div>
   </div>
-
-  <div class="sidebar-footer">
-    <a class="nav-link footer-link"
-       href="<?= $APP_BASE ?>views/perfil.php">
-      <span class="nav-icon">👤</span>
-      <span class="nav-text">Mi Perfil</span>
-    </a>
-  </div>
 </aside>
-
-  <!-- CONTENIDO -->
   <div class="content-area">
     <header class="topbar topbar-light">
       <div class="topbar-left">
@@ -145,7 +135,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <?php endif; ?>
       </div>
     </header>
-
     <main class="page-wrapper">
       <div class="list-tools">
         <div class="list-tools-inner">
@@ -155,8 +144,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
           <button id="btnNuevoUsuario" class="btn">Nuevo Usuario</button>
         </div>
       </div>
-
-      <!-- Tabla de Roles -->
       <div id="panelRoles" class="card table-card">
         <div class="card-header">Roles registrados</div>
         <div class="card-body">
@@ -168,8 +155,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
           </div>
         </div>
       </div>
-
-      <!-- Tabla de Usuarios -->
       <div id="panelUsuarios" class="card table-card" style="display:none">
         <div class="card-header">Usuarios registrados</div>
         <div class="card-body">
@@ -187,13 +172,11 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
           </div>
         </div>
       </div>
-
       <div id="errorBox" class="error-box" hidden></div>
     </main>
   </div>
 </div>
 
-<!-- MODAL Rol -->
 <div id="modalRol" class="modal" aria-hidden="true">
   <div class="modal__dialog">
     <div class="modal__header">
@@ -212,10 +195,8 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
         <div>
           <label>Permisos</label>
           <div id="checksPermisos" style="display:grid; gap:6px;"></div>
-          <!-- se cargan dinámicamente desde la API -->
         </div>
       </div>
-
       <div class="modal__footer">
         <button class="btn-light" type="button" data-close>Cancelar</button>
         <button class="btn" type="submit">Guardar</button>
@@ -224,7 +205,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
   </div>
 </div>
 
-<!-- MODAL Usuario -->
 <div id="modalUsuario" class="modal" aria-hidden="true">
   <div class="modal__dialog">
     <div class="modal__header">
@@ -243,11 +223,11 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
           <input name="contrasena" id="contrasena" class="input" type="password">
         </div>
         <div>
-          <label>Rol *</label>
+          <label>Rol</label>
           <select name="id_rol" id="id_rol_user" class="input" required></select>
         </div>
         <div>
-          <label>Empleado *</label>
+          <label>Empleado</label>
           <select name="id_datos_persona" id="id_datos_persona" class="input" required></select>
       </div>
 

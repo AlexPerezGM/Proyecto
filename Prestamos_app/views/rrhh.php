@@ -103,14 +103,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
       </a>
     </div>
   </div>
-
-  <div class="sidebar-footer">
-    <a class="nav-link footer-link"
-       href="<?= $APP_BASE ?>views/perfil.php">
-      <span class="nav-icon">👤</span>
-      <span class="nav-text">Mi Perfil</span>
-    </a>
-  </div>
 </aside>
   <main class="content-area">
     
@@ -197,8 +189,13 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
               <table id="tablaNomina" class="table-simple">
                 <thead>
                   <tr>
-                    <th>Empleado</th><th>Salario base</th><th>Horas extra</th>
-                    <th>Bonificaciones</th><th>Deducciones</th><th>Salario neto</th>
+                    <th>Empleado</th>
+                    <th>Salario base</th>
+                    <th>Horas extra</th>
+                    <th>Bonificaciones</th>
+                    <th>Deducciones</th>
+                    <th>Salario neto</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody></tbody>

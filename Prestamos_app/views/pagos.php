@@ -100,13 +100,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         </a>
       </div>
     </div>
-
-    <div class="sidebar-footer">
-      <a class="nav-link footer-link" href="views/perfil.php">
-        <span class="nav-icon">👤</span>
-        <span class="nav-text">Mi Perfil</span>
-      </a>
-    </div>
   </aside>
 
   <div class="main-area">
@@ -140,15 +133,10 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
     <div class="page-wrapper">
 
     <section class="card">
-      <div class="card-header">Buscar préstamo / contrato</div>
+      <div class="card-header">Seleccionar prestamo a pagar</div>
       <div class="card-body">
-        <p class="card-subtitle">
-          Selecciona el préstamo que se va a cobrar. La búsqueda puede hacerse por nombre del cliente,
-          cédula, número de contrato o ID interno del préstamo.
-        </p>
-
         <div style="display:flex;gap:.5rem;align-items:center">
-          <input id="q" type="text" class="input" placeholder="Nombre / Cédula / Contrato / ID préstamo">
+          <input id="q" type="text" class="input" placeholder="Nombre / Cédula / Contrato de préstamo">
           <button id="btnBuscar" class="btn-primary">Buscar</button>
         </div>
 
@@ -163,7 +151,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
                 <th style="width:140px">Acción</th>
               </tr>
             </thead>
-            <tbody><!-- js pinta aquí --></tbody>
+            <tbody></tbody>
           </table>
         </div>
       </div>
@@ -180,12 +168,8 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
             <p><b>Saldo pendiente:</b> RD$ <span id="p_saldo">0.00</span></p>
           </div>
 
-          <!-- Factura / cuota actual -->
           <div class="box">
-            <h3>Factura / cuota actual</h3>
-            <p>
-              <b>Factura:</b> <span id="c_factura">-</span>
-            </p>
+            <h3>Cuota actual</h3>
             <p>
               <b>Cuota #</b> <span id="c_num">-</span>
               &bull;
@@ -196,7 +180,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
               <li>Interés: RD$ <span id="c_interes">0.00</span></li>
               <li>Cargos / comisiones: RD$ <span id="c_cargos">0.00</span></li>
               <li>Saldo de la cuota: RD$ <span id="c_saldo">0.00</span></li>
-              <li>Total a restante: RD$ <span id="c_saldo_restante">0.00</span></li>
+              <li>Total restante: RD$ <span id="c_saldo_restante">0.00</span></li>
             </ul>
           </div>
           <div class="box">
@@ -204,7 +188,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
             <p><b>Mora calculada:</b> RD$ <span id="p_mora">0.00</span></p>
           </div>
 
-          <!-- Total a pagar -->
           <div class="box">
             <h3>Total a pagar (hoy)</h3>
             <p style="font-size:1.3rem">
@@ -221,7 +204,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
             <button id="btnEfectivo" class="btn-primary">Pago en efectivo</button>
             <button id="btnTransfer" class="btn-primary">Pago por transferencia</button>
             <button id="btnGarantia" class="btn-primary">Usar garantía</button>
-            <button id="btnCerrar"   class="btn-danger">Cerrar préstamo</button>
           </div>
         </div>
 
@@ -231,8 +213,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
   </div>
   </div>
 
-  <!-- MODALES -->
-  <!-- Efectivo -->
   <div id="modalEfectivo" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -310,10 +290,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
         <input type="hidden" name="action" value="garantia">
         <input type="hidden" id="ga_id_prestamo" name="id_prestamo">
         <div class="modal-body">
-          <p class="text-muted">
-            Se aplicará el monto seleccionado de la garantía asociada al préstamo.
-          </p>
-
           <label>ID Garantía (asociada al préstamo)</label>
           <input type="number" name="id_garantia" class="input" required>
 
@@ -359,7 +335,6 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
       </form>
     </div>
   </div>
-
   <!-- Comprobante -->
   <div id="modalComprobante" class="modal">
     <div class="modal-content">
@@ -369,6 +344,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE.'/');
       </div>
       <div id="compContenido" class="modal-body"></div>
       <div class="modal-footer">
+        <button id="compImprimir" class="btn-primary">Imprimir comprobante</button>
         <button data-close class="btn-light">Cerrar</button>
       </div>
     </div>

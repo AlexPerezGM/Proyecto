@@ -1,57 +1,52 @@
 <?php
-// views/docs_cliente.php
 require_once __DIR__ . '/../config/db.php';
 
-// Calcular BASE_URL como en clientes.php
 $BASE_URL = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $BASE_URL = preg_replace('#/views$#', '', $BASE_URL);
 $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/');
 
-$idCliente = isset($_GET['id_cliente']) ? (int)$_GET['id_cliente'] : 0;
-if ($idCliente <= 0) {
-    http_response_code(400);
-    echo "Cliente inválido.";
-    exit;
+$idEmpleado = isset($_GET['id_empleado']) ? (int)$_GET['id_empleado'] : 0;
+if ($idEmpleado <= 0) {
+  http_response_code(400);
+  echo "Empleado inválido.";
+  exit;
 }
 
-// Obtener datos básicos del cliente (nombre + documento)
 $sql = "
-    SELECT
-      c.id_cliente,
-      dp.nombre,
-      dp.apellido,
-      di.numero_documento
-    FROM cliente c
-    JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
-    LEFT JOIN documento_identidad di ON di.id_datos_persona = dp.id_datos_persona
-    WHERE c.id_cliente = ?
-    LIMIT 1
+  SELECT
+    e.id_empleado,
+    dp.nombre,
+    dp.apellido,
+    di.numero_documento
+  FROM empleado e
+  JOIN datos_persona dp ON dp.id_datos_persona = e.id_datos_persona
+  LEFT JOIN documento_identidad di ON di.id_datos_persona = dp.id_datos_persona
+  WHERE e.id_empleado = ?
+  LIMIT 1
 ";
 $st = $conn->prepare($sql);
-$st->bind_param("i", $idCliente);
+$st->bind_param("i", $idEmpleado);
 $st->execute();
 $cli = $st->get_result()->fetch_assoc();
 $st->close();
 
 if (!$cli) {
-    http_response_code(404);
-    echo "Cliente no encontrado.";
-    exit;
+  http_response_code(404);
+  echo "Empleado no encontrado.";
+  exit;
 }
 
 $nombreCompleto = trim(($cli['nombre'] ?? '') . ' ' . ($cli['apellido'] ?? ''));
 $numeroDoc = $cli['numero_documento'] ?? '';
 
-// Construir nombre de carpeta igual que en la API
 $folderName = preg_replace('/[^0-9A-Za-z]/', '', $numeroDoc);
 if ($folderName === '') {
-    $folderName = 'CLI_' . $idCliente;
+  $folderName = 'EMP_' . $idEmpleado;
 }
 
-$folderPath = __DIR__ . '/../uploads/clientes/' . $folderName;
-$webFolder  = $BASE_URL . 'uploads/clientes/' . $folderName . '/';
+$folderPath = __DIR__ . '/../uploads/empleados/' . $folderName;
+$webFolder  = $BASE_URL . 'uploads/empleados/' . $folderName . '/';
 
-// Escanear recursivamente la carpeta para construir un índice de archivos y subcarpetas
 $entries = [];
 
 if (is_dir($folderPath)) {
@@ -85,23 +80,22 @@ if (is_dir($folderPath)) {
     }
 }
 
-// Datos para pasar al JS
 $docsData = [
-    'cliente' => [
-        'id'               => $idCliente,
-        'nombre'           => $nombreCompleto,
-        'numero_documento' => $numeroDoc,
-        'carpeta'          => $folderName,
-    ],
-    'entries' => $entries,
-    'baseUrl' => $webFolder,
+  'empleado' => [
+    'id'               => $idEmpleado,
+    'nombre'           => $nombreCompleto,
+    'numero_documento' => $numeroDoc,
+    'carpeta'          => $folderName,
+  ],
+  'entries' => $entries,
+  'baseUrl' => $webFolder,
 ];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Documentos del cliente</title>
+  <title>Documentos del empleado</title>
   <link rel="stylesheet" href="<?= $BASE_URL ?>public/css/dashboard.css">
   <style>
     body {
@@ -332,10 +326,10 @@ $docsData = [
       <div>
         <div class="doc-title">
           <span class="icon">📂</span>
-          <span>Documentos del cliente</span>
+          <span>Documentos del empleado</span>
         </div>
         <div class="doc-meta">
-          <span><strong>Cliente:</strong> <?= htmlspecialchars($nombreCompleto ?: ('ID ' . $idCliente)) ?></span>
+          <span><strong>Empleado:</strong> <?= htmlspecialchars($nombreCompleto ?: ('ID ' . $idEmpleado)) ?></span>
           <span><strong>Documento:</strong> <?= htmlspecialchars($numeroDoc ?: 'No registrado') ?></span>
           <span><strong>Carpeta base:</strong> <?= htmlspecialchars($folderName) ?></span>
         </div>
@@ -374,8 +368,8 @@ $docsData = [
       const entries = Array.isArray(data.entries) ? data.entries : [];
       const baseUrl = data.baseUrl || '';
 
-      let currentPath = '';   // ruta relativa actual ('' = raíz)
-      let searchTerm = '';    // término de búsqueda
+      let currentPath = '';
+      let searchTerm = '';   
 
       const $list = document.getElementById('docListBody');
       const $breadcrumb = document.getElementById('docBreadcrumb');
@@ -419,7 +413,6 @@ $docsData = [
 
         $breadcrumb.innerHTML = html;
 
-        // Eventos para navegar con el breadcrumb
         $breadcrumb.querySelectorAll('.crumb').forEach(function (el) {
           el.addEventListener('click', function () {
             const path = this.getAttribute('data-folder') || '';
@@ -438,14 +431,12 @@ $docsData = [
 
         let filtered;
         if (term) {
-          // modo búsqueda global: buscar en nombre y ruta completa
           filtered = entries.filter(function (entry) {
             const name = (entry.name || '').toLowerCase();
             const rel = (entry.relPath || '').toLowerCase();
             return name.includes(term) || rel.includes(term);
           });
         } else {
-          // modo navegación normal: solo mostrar contenido de la carpeta actual
           filtered = entries.filter(function (entry) {
             return dirName(entry.relPath) === currentPath;
           });
@@ -458,7 +449,6 @@ $docsData = [
 
         filtered.sort(function (a, b) {
           if (a.type !== b.type) {
-            // primero carpetas, luego archivos
             return a.type === 'dir' ? -1 : 1;
           }
           return (a.name || '').localeCompare(b.name || '');
@@ -471,7 +461,6 @@ $docsData = [
           const location = dirName(rel) || 'carpeta raíz';
 
           if (term) {
-            // Modo búsqueda: mostrar ubicación siempre
             if (isDir) {
               return (
                 '<div class="doc-row">' +
@@ -502,7 +491,6 @@ $docsData = [
               );
             }
           } else {
-            // Modo navegación normal: solo contenido de la carpeta actual
             if (isDir) {
               return (
                 '<div class="doc-row">' +
@@ -535,7 +523,6 @@ $docsData = [
 
         $list.innerHTML = rows;
       }
-
       // Buscador
       if ($search) {
         $search.addEventListener('input', function () {
@@ -544,7 +531,6 @@ $docsData = [
         });
       }
 
-      // Navegación por click en las carpetas dentro de la lista
       if ($list) {
         $list.addEventListener('click', function (e) {
           const folderLink = e.target.closest('[data-folder]');
@@ -559,7 +545,6 @@ $docsData = [
         });
       }
 
-      // Primera carga
       renderBreadcrumb();
       renderList();
     })();
