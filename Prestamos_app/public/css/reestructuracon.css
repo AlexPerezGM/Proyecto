@@ -1,7 +1,0 @@
-
-    .grid-page { display:grid; grid-template-columns: 1fr; gap:16px; }
-    .panel { background:#fff; border:1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow); }
-    .panel .panel-header { padding:12px 16px; border-bottom:1px solid var(--border-soft); background:#f9fafb; font-weight:700;}
-    .panel .panel-body { padding:16px; }
-    .table-simple td, .table-simple th { white-space: nowrap; }
-    .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#e0e7ff; color:#4338ca; font-size:.72rem; }
