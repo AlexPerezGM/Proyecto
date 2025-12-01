@@ -62,8 +62,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const $btnProcesarNomina = document.getElementById('btnProcesarNomina');
   const $msgInfoNomina = document.getElementById('msgInfoNomina');
 
-  let modoEdicionNomina = true;
-
 
   const $modalVer = document.getElementById('modalVer');
   const closeModal = (el) => el.classList.remove('show');
@@ -77,6 +75,22 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll('.modal.show').forEach(m => closeModal(m));
     }
   });
+
+  document.getElementById("numero_documento").addEventListener("blur", async () => {
+    const raw = document.getElementById("numero_documento").value || '';
+    const cedula = raw.replace(/\D/g, '');
+
+    const params = new URLSearchParams({
+      action: 'validarCedula',
+      cedula: cedula
+    });
+
+    const res = await jsonFetch(API, params);
+    if (!res.ok) {
+      alert(res.msg || 'Error al validar la cédula');
+      return;
+    }
+  })
 
 
   let CATALOGOS = {};
@@ -387,6 +401,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!esMayorDeEdad(fn)) return alert('El empleado debe ser mayor de edad.');
     const emEl = document.getElementById('email'); const em = emEl ? emEl.value.trim() : '';
     if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return alert('Email no válido.');
+
     const res = await jsonFetch(API, new FormData($frmEmp));
     if (!res.ok) { if ($errEmpForm) { $errEmpForm.hidden = false; $errEmpForm.textContent = res.msg || 'Error al guardar'; } return; }
     if ($errEmpForm) $errEmpForm.hidden = true; if ($modalEmp) $modalEmp.classList.remove('show'); cargarEmpleados(pageEmp); cargarOptions(); // refresca combos de jefe
@@ -491,7 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadAjustes(idEmpleado);
   }
 
-  // Nómina 
+  // NOMINA
   const $periodo = document.getElementById('periodo');
   const $selEmpleado = document.getElementById('selEmpleado');
   const $btnCalcular = document.getElementById('btnCalcular');
@@ -509,6 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function rowsToPayload() {
     return Array.isArray(nomRows) ? nomRows : [];
   }
+
   async function listarEmpleados() {
     const per = $periodo ? $periodo.value.trim() : '';
     if (!validarPeriodo(per))
@@ -534,10 +550,12 @@ document.addEventListener("DOMContentLoaded", () => {
       <tr data-id="${r.id_empleado}" data-idx="${i}">
         <td>${r.nombre}<br><small class="text-muted">${r.cargo}</small></td>
         <td>$${(+r.salario_base).toFixed(2)}</td>
-        <td><input type="number" class="form-control form-control-sm hx-input" 
-        value="${(+r.horas_extra).toFixed(2)}"
-        step="0.01" min="0"
-        style="width:80px;"></td>
+        <td>
+            <input type="number" class="form-control form-control-sm hx-input"
+            placeholder="0" value=""
+            step="0.01" min="0" style="width: 80px; text-align: center;">
+            <small class="text-muted">Horas extras</small>
+        </td>
         <td>$${(+r.bonificaciones).toFixed(2)}</td>
         <td>$${(+r.deducciones).toFixed(2)}</td>
       </tr>
@@ -560,8 +578,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const itemsToSave = [];
     document.querySelectorAll('#tablaNomina tbody tr').forEach(tr => {
       const id = tr.dataset.id;
-      const input = tr.querySelector('.hx-input');
-      if (id && input) {
+      const input = tr.querySelector('.hx-input, .hx-input-manual');
+      if (id && input && input.value > 0) {
         itemsToSave.push({
           id_empleado: id,
           monto: input.value || '0'
@@ -588,6 +606,8 @@ document.addEventListener("DOMContentLoaded", () => {
       periodo: per,
       id_empleado: 'ALL'
     });
+    if ($tbNom) $tbNom.innerHTML = '<tr><td colspan="6" class="text-center">Calculando totales...</td></tr>';
+
     const calcRes = await jsonFetch(API, paramsCalc);
     if (!calcRes.ok) return alert("Error al calcular la nomina: " + calcRes.msg);
 
@@ -621,6 +641,12 @@ document.addEventListener("DOMContentLoaded", () => {
         <td class="text-success">$${(+r.bonificaciones).toFixed(2)}</td>
         <td class="text-danger">$${(+r.deducciones).toFixed(2)}</td>
         <td class="fw-bold">$${neto.toFixed(2)}</td>
+        <td>
+            <button class="btn btn-sm btn-light btn-outline-secondary btn-imprimir-ind"
+            type="button"
+            title="Comprobante"> Comprobante
+            </button>
+        </td>
       </tr>`;
     }).join('');
 
@@ -633,16 +659,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   $btnCalcular?.addEventListener('click', async () => {
-    // Guardar las horas extras visibles antes de pedir la vista previa de la nómina
     const per = $periodo ? $periodo.value.trim() : '';
     if (!validarPeriodo(per)) { if ($errNom) { $errNom.hidden = false; $errNom.textContent = 'Ingrese un periodo válido (YYYY-MM).'; } return; }
 
     const itemsToSave = [];
     document.querySelectorAll('#tablaNomina tbody tr').forEach(tr => {
       const id = tr.dataset.id;
-      const input = tr.querySelector('.hx-input');
+
+      const input = tr.querySelector('.hx-input, .hx-input-manual');
+
       if (id && input) {
-        itemsToSave.push({ id_empleado: id, monto: input.value || '0' });
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+          itemsToSave.push({
+            id_empleado: id,
+            monto: val
+          });
+        }
       }
     });
 
@@ -659,13 +692,22 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!saveRes.ok) return alert("Error al guardar: " + (saveRes.msg || saveRes.error || ''));
     }
 
-    const params = new URLSearchParams({ action: 'nomina_preview', periodo: per, id_empleado: $selEmpleado ? $selEmpleado.value : 'ALL' });
+    const params = new URLSearchParams({
+      action: 'nomina_preview',
+      periodo: per,
+      id_empleado: $selEmpleado ? $selEmpleado.value : 'ALL'
+    });
+
     const j = await jsonFetch(API, params);
-    if (!j.ok) { if ($errNom) { $errNom.hidden = false; $errNom.textContent = j.msg || 'Error'; } return; }
-    if ($errNom) $errNom.hidden = true; pintarNomina(j.rows || []);
+    if (!j.ok) {
+      if ($errNom) { $errNom.hidden = false; $errNom.textContent = j.msg || 'Error'; }
+      return;
+    }
+    if ($errNom) $errNom.hidden = true;
+    pintarNomina(j.rows || []);
   });
 
-  $tbNom.querySelectorAll('.hx-input').forEach((input, i) => {
+  $tbNom.querySelectorAll('.hx-input, .hx-input-manual').forEach((input, i) => {
     input.addEventListener('input', () => {
       const val = parseFloat(input.value) || 0;
       nomRows[i].horas_extra = val;
@@ -676,6 +718,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const tr = input.closest('tr');
       tr.children[5].textContent = `$${neto.toFixed(2)}`;
     });
+  });
+
+  $tbNom?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-imprimir-ind');
+    if (!btn) return;
+
+    const tr = btn.closest('tr');
+    const idEmpleado = tr.dataset.id;
+    const per = document.getElementById('periodo').value.trim();
+
+    if (!per) return alert('Seleccione un periodo válido.');
+
+    const params = new URLSearchParams({
+      action: 'nomina_comprobantes',
+      periodo: per,
+      id_empleado: idEmpleado
+    });
+    const j = await jsonFetch(API, params);
+
+    if (!j.ok) {
+      alert(j.msg || 'Error generando comprobante');
+      return;
+    }
+
+    const w = window.open('', '_blank');
+    w.document.write(j.html || '<p>Error generando comprobante</p>');
+    w.document.close();
+    w.focus();
   });
 
   $btnGuardar?.addEventListener('click', async () => {
@@ -693,7 +763,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $btnComprob?.addEventListener('click', async () => {
     const per = $periodo ? $periodo.value.trim() : '';
-    const j = await jsonFetch(API, new URLSearchParams({ action: 'nomina_comprobantes', periodo: per }));
+    const j = await jsonFetch(API, new URLSearchParams({
+      action: 'nomina_comprobantes',
+      periodo: per
+    }));
     if (!j.ok) return alert(j.msg || 'Error generando comprobantes');
     const w = window.open('', '_blank');
     w.document.write(j.html || '<p>Sin datos</p>');

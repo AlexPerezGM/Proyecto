@@ -1,4 +1,3 @@
-// public/JS/pagos.js
 document.addEventListener('DOMContentLoaded', () => {
   const ROOT = location.pathname.replace(/\/views\/.*/, '/');
   const API = ROOT + 'api/pagos.php';
@@ -38,8 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const $btnEfectivo = document.getElementById('btnEfectivo');
   const $btnTransfer = document.getElementById('btnTransfer');
   const $btnGarantia = document.getElementById('btnGarantia');
-  const $btnCerrar = document.getElementById('btnCerrar');
-  const $btnAplicarMora = document.getElementById('btnAplicarMora');
 
   const $ef_id = document.getElementById('ef_id_prestamo');
   const $tr_id = document.getElementById('tr_id_prestamo');
@@ -67,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
     } catch (e) {
-      return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
   }
 
@@ -120,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     prestamoSel = js.resumen;
 
     ui.estado.textContent = prestamoSel?.estado ?? '-';
-    ui.saldo.textContent = Number(prestamoSel?.saldo_total || 0).toFixed(2);
 
     const c = prestamoSel?.cuota_actual;
     if (c) {
@@ -133,10 +129,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ui.csal_restante) {
         ui.csal_restante.textContent = Number(c.saldo_restante || 0).toFixed(2);
       }
+      ui.saldo.textContent = Number(c.saldo_restante || 0).toFixed(2);
     } else {
       ui.cnum.textContent = '-';
       ui.cfecha.textContent = '-';
       ui.ccap.textContent = ui.cint.textContent = ui.ccarg.textContent = ui.csal.textContent = '0.00';
+      ui.saldo.textContent = Number(prestamoSel?.saldo_total || 0).toFixed(2);
     }
 
     const mora = Number(js.mora?.mora_total || 0);
@@ -165,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $btnEfectivo.addEventListener('click', () => open(MODS.efectivo));
   $btnTransfer.addEventListener('click', () => open(MODS.transfer));
   $btnGarantia.addEventListener('click', () => open(MODS.garantia));
-  $btnCerrar.addEventListener('click', () => open(MODS.cierre));
 
   function onSubmit(form) {
     form.addEventListener('submit', async (e) => {
@@ -235,9 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #ccc;">
               *** Gracias por su preferencia ***
             </div>
-            <div style="text-align: center; margin-top: 15px;">
-              <button onclick="window.print()" style="background: none; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8rem;">🖨️ Imprimir</button>
-            </div>
           </div>
         `;
         open(MODS.comp);
@@ -266,4 +260,15 @@ document.addEventListener('DOMContentLoaded', () => {
   onSubmit(document.getElementById('frmTransfer'));
   onSubmit(document.getElementById('frmGarantia'));
   onSubmit(document.getElementById('frmCierre'));
+
+  document.getElementById('compImprimir')?.addEventListener('click', () => {
+    const contenido = document.getElementById('compContenido');
+    if (!contenido) return;
+    const w = window.open('', '_blank');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Comprobante</title></head><body>${contenido.innerHTML}</body></html>`;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  });
 });
