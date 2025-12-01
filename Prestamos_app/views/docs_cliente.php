@@ -51,16 +51,51 @@ if ($folderName === '') {
 $folderPath = __DIR__ . '/../uploads/clientes/' . $folderName;
 $webFolder  = $BASE_URL . 'uploads/clientes/' . $folderName . '/';
 
-$files = [];
+// Escanear recursivamente la carpeta para construir un índice de archivos y subcarpetas
+$entries = [];
+
 if (is_dir($folderPath)) {
-    foreach (scandir($folderPath) as $f) {
-        if ($f === '.' || $f === '..') continue;
-        $files[] = [
-            'name' => $f,
-            'url'  => $webFolder . $f
-        ];
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($folderPath, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $fileInfo) {
+        $relPath = substr($fileInfo->getPathname(), strlen($folderPath) + 1);
+        $relPath = str_replace('\\', '/', $relPath); // normalizar
+
+        if ($fileInfo->isDir()) {
+            $entries[] = [
+                'type'    => 'dir',
+                'name'    => $fileInfo->getFilename(),
+                'relPath' => $relPath
+            ];
+        } else {
+            $ext = strtolower(pathinfo($fileInfo->getFilename(), PATHINFO_EXTENSION));
+            $relativeWeb = $relPath;
+            $url = $webFolder . str_replace('%2F', '/', rawurlencode($relativeWeb));
+            $entries[] = [
+                'type'    => 'file',
+                'name'    => $fileInfo->getFilename(),
+                'relPath' => $relPath,
+                'ext'     => $ext,
+                'url'     => $url
+            ];
+        }
     }
 }
+
+// Datos para pasar al JS
+$docsData = [
+    'cliente' => [
+        'id'               => $idCliente,
+        'nombre'           => $nombreCompleto,
+        'numero_documento' => $numeroDoc,
+        'carpeta'          => $folderName,
+    ],
+    'entries' => $entries,
+    'baseUrl' => $webFolder,
+];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -117,8 +152,52 @@ if (is_dir($folderPath)) {
       display: block;
     }
 
+    .doc-search {
+      margin-top: 12px;
+      margin-bottom: 10px;
+    }
+
+    .doc-search-input {
+      width: 100%;
+      max-width: 100%;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border-soft);
+      font-size: 0.9rem;
+      outline: none;
+      background: #ffffff;
+    }
+
+    .doc-search-input:focus {
+      border-color: var(--blue-border);
+      box-shadow: 0 0 0 1px var(--blue-border);
+    }
+
+    .doc-search small {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .doc-breadcrumb {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .doc-breadcrumb .crumb {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+
+    .doc-breadcrumb .crumb-sep {
+      margin: 0 4px;
+    }
+
     .doc-list {
-      margin-top: 8px;
+      margin-top: 4px;
       border-radius: 10px;
       border: 1px solid var(--border-soft);
       background: #f9fafb;
@@ -135,7 +214,7 @@ if (is_dir($folderPath)) {
     }
 
     .doc-row:nth-child(odd) {
-      background: #f9fafb;
+      background: #f0f4f8;
     }
 
     .doc-row:last-child {
@@ -159,6 +238,20 @@ if (is_dir($folderPath)) {
       color: var(--blue-strong);
     }
 
+    .doc-name span.badge-dir {
+      border-color: var(--grayblue-border);
+      background: #e5e7eb;
+      color: var(--grayblue-strong);
+    }
+
+    .doc-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
     .doc-actions a {
       text-decoration: none;
       font-size: 0.8rem;
@@ -176,6 +269,10 @@ if (is_dir($folderPath)) {
       border-color: var(--blue-border);
       color: var(--blue-strong);
       background: var(--blue-bg);
+    }
+
+    .doc-location {
+      color: var(--text-dim);
     }
 
     .empty-msg {
@@ -219,6 +316,10 @@ if (is_dir($folderPath)) {
         gap: 8px;
       }
 
+      .doc-actions {
+        justify-content: flex-start;
+      }
+
       .back-link {
         text-align: left;
       }
@@ -236,38 +337,232 @@ if (is_dir($folderPath)) {
         <div class="doc-meta">
           <span><strong>Cliente:</strong> <?= htmlspecialchars($nombreCompleto ?: ('ID ' . $idCliente)) ?></span>
           <span><strong>Documento:</strong> <?= htmlspecialchars($numeroDoc ?: 'No registrado') ?></span>
-          <span><strong>Carpeta:</strong> <?= htmlspecialchars($folderName) ?></span>
+          <span><strong>Carpeta base:</strong> <?= htmlspecialchars($folderName) ?></span>
         </div>
       </div>
     </div>
 
+    <div class="doc-search">
+      <input
+        id="docSearch"
+        class="doc-search-input"
+        type="text"
+        placeholder="Buscar por nombre de archivo o ruta (ej: seguro, 2025/CONTRATO)...">
+      <small>
+        El buscador revisa todas las subcarpetas y te indica dónde está cada archivo.
+        También puedes navegar manualmente usando la ruta de arriba.
+      </small>
+    </div>
+
+    <div class="doc-breadcrumb" id="docBreadcrumb"></div>
+
     <div class="doc-list">
-      <?php if (empty($files)): ?>
-        <div class="empty-msg">
-          No hay documentos cargados para este cliente.
-        </div>
-      <?php else: ?>
-        <?php foreach ($files as $f): 
-          $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
-        ?>
-          <div class="doc-row">
-            <div class="doc-name">
-              <span class="badge"><?= strtoupper($ext) ?></span>
-              <span><?= htmlspecialchars($f['name']) ?></span>
-            </div>
-            <div class="doc-actions">
-              <a href="<?= htmlspecialchars($f['url']) ?>" target="_blank">
-                🔍 Ver / descargar
-              </a>
-            </div>
-          </div>
-        <?php endforeach; ?>
-      <?php endif; ?>
+      <div id="docListBody"></div>
     </div>
 
     <div class="back-link">
       <a href="javascript:window.close()">Cerrar pestaña</a>
     </div>
   </div>
+
+  <script>
+    window.DOCS_DATA = <?php echo json_encode($docsData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  </script>
+  <script>
+    (function () {
+      const data = window.DOCS_DATA || {};
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+      const baseUrl = data.baseUrl || '';
+
+      let currentPath = '';   // ruta relativa actual ('' = raíz)
+      let searchTerm = '';    // término de búsqueda
+
+      const $list = document.getElementById('docListBody');
+      const $breadcrumb = document.getElementById('docBreadcrumb');
+      const $search = document.getElementById('docSearch');
+
+      function normalizePath(p) {
+        if (!p) return '';
+        return String(p).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      }
+
+      function dirName(relPath) {
+        const norm = normalizePath(relPath);
+        if (!norm) return '';
+        const parts = norm.split('/');
+        parts.pop();
+        return parts.join('/');
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function renderBreadcrumb() {
+        if (!$breadcrumb) return;
+        const parts = currentPath ? currentPath.split('/') : [];
+        let html = '<span class="crumb" data-folder="">📁 Raíz</span>';
+
+        let acc = '';
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (!p) continue;
+          acc = acc ? acc + '/' + p : p;
+          html += ' <span class="crumb-sep">/</span> ';
+          html += '<span class="crumb" data-folder="' + escapeHtml(acc) + '">' + escapeHtml(p) + '</span>';
+        }
+
+        $breadcrumb.innerHTML = html;
+
+        // Eventos para navegar con el breadcrumb
+        $breadcrumb.querySelectorAll('.crumb').forEach(function (el) {
+          el.addEventListener('click', function () {
+            const path = this.getAttribute('data-folder') || '';
+            currentPath = normalizePath(path);
+            searchTerm = '';
+            if ($search) $search.value = '';
+            renderBreadcrumb();
+            renderList();
+          });
+        });
+      }
+
+      function renderList() {
+        if (!$list) return;
+        const term = (searchTerm || '').toLowerCase();
+
+        let filtered;
+        if (term) {
+          // modo búsqueda global: buscar en nombre y ruta completa
+          filtered = entries.filter(function (entry) {
+            const name = (entry.name || '').toLowerCase();
+            const rel = (entry.relPath || '').toLowerCase();
+            return name.includes(term) || rel.includes(term);
+          });
+        } else {
+          // modo navegación normal: solo mostrar contenido de la carpeta actual
+          filtered = entries.filter(function (entry) {
+            return dirName(entry.relPath) === currentPath;
+          });
+        }
+
+        if (!filtered.length) {
+          $list.innerHTML = '<div class="empty-msg">No se encontraron documentos para este criterio.</div>';
+          return;
+        }
+
+        filtered.sort(function (a, b) {
+          if (a.type !== b.type) {
+            // primero carpetas, luego archivos
+            return a.type === 'dir' ? -1 : 1;
+          }
+          return (a.name || '').localeCompare(b.name || '');
+        });
+
+        const rows = filtered.map(function (entry) {
+          const isDir = entry.type === 'dir';
+          const nameEsc = escapeHtml(entry.name || '');
+          const rel = entry.relPath || '';
+          const location = dirName(rel) || 'carpeta raíz';
+
+          if (term) {
+            // Modo búsqueda: mostrar ubicación siempre
+            if (isDir) {
+              return (
+                '<div class="doc-row">' +
+                  '<div class="doc-name">' +
+                    '<span class="badge badge-dir">DIR</span>' +
+                    '<span>' + nameEsc + '</span>' +
+                  '</div>' +
+                  '<div class="doc-actions">' +
+                    '<span class="doc-location">Ubicación: ' + escapeHtml(location) + '</span>' +
+                    '<a href="javascript:void(0)" data-folder="' + escapeHtml(rel) + '">📂 Abrir carpeta</a>' +
+                  '</div>' +
+                '</div>'
+              );
+            } else {
+              const ext = ((entry.ext || '') || 'FILE').toUpperCase();
+              const url = entry.url ? entry.url : (baseUrl + encodeURIComponent(rel));
+              return (
+                '<div class="doc-row">' +
+                  '<div class="doc-name">' +
+                    '<span class="badge">' + escapeHtml(ext) + '</span>' +
+                    '<span>' + nameEsc + '</span>' +
+                  '</div>' +
+                  '<div class="doc-actions">' +
+                    '<span class="doc-location">Ubicación: ' + escapeHtml(location) + '</span>' +
+                    '<a href="' + escapeHtml(url) + '" target="_blank">🔍 Ver / descargar</a>' +
+                  '</div>' +
+                '</div>'
+              );
+            }
+          } else {
+            // Modo navegación normal: solo contenido de la carpeta actual
+            if (isDir) {
+              return (
+                '<div class="doc-row">' +
+                  '<div class="doc-name">' +
+                    '<span class="badge badge-dir">DIR</span>' +
+                    '<span>' + nameEsc + '</span>' +
+                  '</div>' +
+                  '<div class="doc-actions">' +
+                    '<a href="javascript:void(0)" data-folder="' + escapeHtml(rel) + '">📂 Abrir carpeta</a>' +
+                  '</div>' +
+                '</div>'
+              );
+            } else {
+              const ext = ((entry.ext || '') || 'FILE').toUpperCase();
+              const url = entry.url ? entry.url : (baseUrl + encodeURIComponent(rel));
+              return (
+                '<div class="doc-row">' +
+                  '<div class="doc-name">' +
+                    '<span class="badge">' + escapeHtml(ext) + '</span>' +
+                    '<span>' + nameEsc + '</span>' +
+                  '</div>' +
+                  '<div class="doc-actions">' +
+                    '<a href="' + escapeHtml(url) + '" target="_blank">🔍 Ver / descargar</a>' +
+                  '</div>' +
+                '</div>'
+              );
+            }
+          }
+        }).join('');
+
+        $list.innerHTML = rows;
+      }
+
+      // Buscador
+      if ($search) {
+        $search.addEventListener('input', function () {
+          searchTerm = this.value.trim();
+          renderList();
+        });
+      }
+
+      // Navegación por click en las carpetas dentro de la lista
+      if ($list) {
+        $list.addEventListener('click', function (e) {
+          const folderLink = e.target.closest('[data-folder]');
+          if (folderLink) {
+            const path = folderLink.getAttribute('data-folder') || '';
+            currentPath = normalizePath(path);
+            searchTerm = '';
+            if ($search) $search.value = '';
+            renderBreadcrumb();
+            renderList();
+          }
+        });
+      }
+
+      // Primera carga
+      renderBreadcrumb();
+      renderList();
+    })();
+  </script>
 </body>
 </html>
