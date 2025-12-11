@@ -623,6 +623,7 @@ $APP_BASE = $APP_BASE . '/';
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeModal('modalMora')">Cancelar</button>
         <button type="submit" class="btn-primary">Guardar</button>
+        <button type="button" id="btnAplicarMora" class="btn-primary outline"> Aplicar mora ahora</button>
       </div>
     </form>
   </div>
