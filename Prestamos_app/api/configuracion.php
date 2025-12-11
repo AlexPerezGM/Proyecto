@@ -32,6 +32,32 @@ try {
   if (!isset($_SESSION['usuario'])) {
     bad('No autorizado', 401);
   }
+if ($module === 'mora' && $action === 'apply') {
+    try {
+        if ($conn->multi_query("CALL aplicar_mora()")) {
+   
+            do {
+                if ($rs = $conn->store_result()) {
+                    $rs->free();
+                }
+            } while ($conn->more_results() && $conn->next_result());
+        } else {
+            throw new Exception($conn->error ?: 'No se pudo ejecutar aplicar_mora()');
+        }
+
+        echo json_encode([
+            'ok'      => true,
+            'message' => 'Mora aplicada correctamente.'
+        ]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode([
+            'ok'    => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+    exit; 
+}
 
   switch($module) {
     case 'deduccion':
@@ -465,6 +491,38 @@ function handleMora($conn, $action) {
       $vigente_hasta = s('vigente_hasta');
       $estado = s('estado');
 
+      if ($module === 'mora') {
+    switch ($action) {
+     case 'apply':
+            try {
+                // Ejecutar el procedimiento aplicar_mora()
+                if ($conn->multi_query("CALL aplicar_mora()")) {
+                    // Consumir cualquier resultset que devuelva el procedimiento
+                    do {
+                        if ($rs = $conn->store_result()) {
+                            $rs->free();
+                        }
+                    } while ($conn->more_results() && $conn->next_result());
+                } else {
+                    throw new Exception($conn->error ?: 'No se pudo ejecutar aplicar_mora()');
+                }
+
+                echo json_encode([
+                    'ok'      => true,
+                    'message' => 'Mora aplicada correctamente.'
+                ]);
+            } catch (Throwable $e) {
+                http_response_code(500);
+                echo json_encode([
+                    'ok'    => false,
+                    'error' => $e->getMessage()
+                ]);
+            }
+            break;
+            exit;
+    }
+}
+
       if ($porcentaje_mora < 0 || $porcentaje_mora > 50) 
         bad('El porcentaje de mora debe estar entre 0 y 50');
       if ($dias_gracia < 0) 
@@ -488,6 +546,7 @@ function handleMora($conn, $action) {
       }
       ok(['message' => 'Configuración de mora guardada exitosamente']);
       break;
+
 
     case 'delete':
       $id = i('id');
