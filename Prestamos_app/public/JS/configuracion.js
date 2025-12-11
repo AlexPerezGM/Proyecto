@@ -102,6 +102,26 @@ async function apiRequest(module, action, data = {}) {
     }
 }
 
+
+async function aplicarMoraAhora() {
+
+    if (!confirm('Esto recalculará y aplicará la mora según la configuración ACTIVA. ¿Deseas continuar?')) return;
+
+    try {
+        const result = await apiRequest('mora', 'apply');
+        alert('Mora aplicada correctamente.');
+        loadMora();
+    } catch (error) {
+        alert('Error aplicando mora: ' + error.message);
+        console.error(error);
+    }
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const btnAplicar = document.getElementById('btnAplicarMora');
+    if (btnAplicar) btnAplicar.addEventListener('click', aplicarMoraAhora);
+});
+
+
 async function loadDeduccion() {
     try {
         const response = await apiRequest('deduccion', 'list');
