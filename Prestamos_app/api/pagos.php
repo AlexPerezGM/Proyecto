@@ -201,6 +201,7 @@ if ($action === 'cronograma') {
   ok(['ok'=>true,'cronograma'=>$rows]);
 }
 
+
 if ($action === 'pay'){
   $id_prestamo = num_or_null(rq('id_prestamo')); if(!$id_prestamo) bad('id_prestamo invalido');
   $metodo = (string)rq('metodo', ''); if ($metodo === '') bad('metodo requerido');

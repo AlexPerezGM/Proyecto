@@ -53,6 +53,149 @@ function validarCedula($cedula){
     }
     return ($suma % 10) === 0;
 }
+if (!function_exists('san_nombre_archivo')) {
+    function san_nombre_archivo($s) {
+        $s = trim((string)$s);
+        $s = preg_replace('/\s+/', '_', $s);              // espacios -> _
+        $s = preg_replace('/[^0-9A-Za-z_\-]/', '', $s);   // quitar caracteres raros
+        return $s !== '' ? $s : 'NA';
+    }
+}
+
+// Helper para sanear partes del nombre de archivo (solo letras, números, _ y -)
+if (!function_exists('san_nombre_archivo')) {
+    function san_nombre_archivo($s) {
+        $s = trim((string)$s);
+        $s = preg_replace('/\s+/', '_', $s);              // espacios -> _
+        $s = preg_replace('/[^0-9A-Za-z_\-]/', '', $s);   // quitar caracteres raros
+        return $s !== '' ? $s : 'NA';
+    }
+}
+
+/**
+ * Subir documentos personales del cliente.
+ * Ruta final:
+ *   .../uploads/clientes/{CEDULA_LIMPIA}/Documentos personales/NOMBRE_ARCHIVO.ext
+ */
+function upload_doc_cliente(mysqli $conn) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $id_cliente   = (int)($_POST['id_cliente']   ?? 0);
+    $tipo_archivo = (string)($_POST['tipo_archivo'] ?? 'OTRO');
+
+    if ($id_cliente <= 0) {
+        echo json_encode(['ok' => false, 'msg' => 'id_cliente inválido']);
+        return;
+    }
+    if (
+        !isset($_FILES['archivo']) ||
+        ($_FILES['archivo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+    ) {
+        echo json_encode(['ok' => false, 'msg' => 'Archivo requerido']);
+        return;
+    }
+
+    // 1) Datos básicos para nombre de carpeta/archivo.
+    //    Pueden venir del formulario o se consultan en BD si no llegan.
+    $nombre           = trim((string)($_POST['nombre']           ?? ''));
+    $apellido         = trim((string)($_POST['apellido']         ?? ''));
+    $numero_documento = trim((string)($_POST['numero_documento'] ?? ''));
+
+    if ($nombre === '' || $apellido === '' || $numero_documento === '') {
+        $sql = "SELECT dp.nombre, dp.apellido, di.numero_documento
+                FROM cliente c
+                JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
+                LEFT JOIN documento_identidad di ON di.id_datos_persona = dp.id_datos_persona
+                WHERE c.id_cliente = ? LIMIT 1";
+        $st = $conn->prepare($sql);
+        $st->bind_param('i', $id_cliente);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+
+        if ($row) {
+            if ($nombre === '')           $nombre           = (string)($row['nombre'] ?? '');
+            if ($apellido === '')         $apellido         = (string)($row['apellido'] ?? '');
+            if ($numero_documento === '') $numero_documento = (string)($row['numero_documento'] ?? '');
+        }
+    }
+
+    // Carpeta del cliente basada en su documento (igual que en pagos/préstamos)
+    $docDir = preg_replace('/[^0-9A-Za-z]/', '', $numero_documento);
+    if ($docDir === '') {
+        $docDir = 'CLI_' . $id_cliente;
+    }
+
+    // 2) Construir estructura de carpetas
+    // Base: .../uploads/clientes
+    $baseDir = __DIR__ . '/../uploads/clientes';
+    if (!is_dir($baseDir)) {
+        @mkdir($baseDir, 0777, true);
+    }
+
+    // Carpeta del cliente: .../uploads/clientes/00300011123
+    $clienteDir = $baseDir . DIRECTORY_SEPARATOR . $docDir;
+    if (!is_dir($clienteDir)) {
+        @mkdir($clienteDir, 0777, true);
+    }
+
+    // Subcarpeta "Documentos personales": .../uploads/clientes/00300011123/Documentos personales
+    $personalesDir = $clienteDir . DIRECTORY_SEPARATOR . 'Documentos personales';
+    if (!is_dir($personalesDir)) {
+        @mkdir($personalesDir, 0777, true);
+    }
+
+    // 3) Validar extensión y armar nombre de archivo descriptivo
+    $orig = (string)($_FILES['archivo']['name'] ?? '');
+    $ext  = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+
+    $permitidas = ['pdf', 'jpg', 'jpeg', 'png'];
+    if (!in_array($ext, $permitidas, true)) {
+        echo json_encode([
+            'ok'  => false,
+            'msg' => 'Extensión no permitida (solo PDF/JPG/PNG)'
+        ]);
+        return;
+    }
+
+    $tipoSan   = san_nombre_archivo($tipo_archivo);          // CEDULA, PASAPORTE, OTRO
+    $nomSan    = san_nombre_archivo($nombre . '_' . $apellido);
+    $docSan    = san_nombre_archivo($numero_documento);
+
+    // Ejemplo:
+    // CEDULA_Juan_Perez_00300011123_15_20251211_210530.pdf
+    $fileOut = sprintf(
+        '%s_%s_%s_%d_%s.%s',
+        $tipoSan,                 // tipo de documento (ej. CEDULA)
+        $nomSan,                  // Juan_Perez
+        $docSan,                  // 00300011123
+        $id_cliente,              // ID cliente
+        date('Ymd_His'),          // timestamp
+        $ext                      // pdf
+    );
+
+    $destAbs = $personalesDir . DIRECTORY_SEPARATOR . $fileOut;
+
+    if (!move_uploaded_file($_FILES['archivo']['tmp_name'], $destAbs)) {
+        echo json_encode(['ok' => false, 'msg' => 'No se pudo guardar el archivo en disco']);
+        return;
+    }
+
+    // 4) (Opcional) Aquí podrías registrar el documento en una tabla de BD si la tienes.
+
+    // 5) Respuesta al frontend
+    $pathRel = 'uploads/clientes/' . $docDir . '/Documentos personales/' . $fileOut;
+
+    echo json_encode([
+        'ok'        => true,
+        'msg'       => 'Documento personal subido correctamente',
+        'path'      => $pathRel,
+        'id_cliente'=> $id_cliente,
+        'archivo'   => $fileOut
+    ]);
+}
+
+
 
 function datos_basicos_cliente(mysqli $conn, int $id_cliente): array {
     $sql = "
@@ -315,6 +458,13 @@ try {
             if ($ing <= $egr) bad('Ingresos deben ser mayores que egresos.', 422);
         }
     };
+
+    $action = $_POST['action'] ?? $_GET['action'] ?? '';
+
+    if ($action === 'upload_doc') {
+        upload_doc_cliente($conn);
+        exit;
+    }
 
     if ($action === 'validarCedula'){
         $cedula_raw = $_POST['cedula'] ?? '';

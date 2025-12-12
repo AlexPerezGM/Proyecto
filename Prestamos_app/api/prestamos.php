@@ -96,6 +96,192 @@ if ($act==='catalogos'){
   $cats['defaults'] = $db->query("SELECT id_tipo_prestamo, nombre, tasa_interes, monto_minimo, id_tipo_amortizacion, plazo_minimo_meses, plazo_maximo_meses FROM tipo_prestamo")->fetch_all(MYSQLI_ASSOC);
   out(['ok'=>true,'data'=>$cats]);
 }
+
+// --- En tu ruteo principal de acciones ---
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
+if ($action === 'upload_doc') {
+    upload_doc_prestamo($conn);
+    exit;
+}
+
+// --- Helper para sanitizar strings en nombres de archivo ---
+function _san($s) {
+    $s = trim((string)$s);
+    $s = preg_replace('/\s+/', '_', $s);
+    $s = preg_replace('/[^0-9A-Za-z_\-]/', '', $s);
+    return $s !== '' ? $s : 'NA';
+}
+
+// --- SUBIDA DE DOCUMENTOS DEL PRÉSTAMO (misma carpeta que facturas del préstamo) ---
+function upload_doc_prestamo(mysqli $conn) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $id_cliente  = (int)($_POST['id_cliente']  ?? 0);
+    $id_prestamo = (int)($_POST['id_prestamo'] ?? 0);
+    $tipo_arch   = strtoupper((string)($_POST['tipo_archivo'] ?? 'OTRO'));
+
+    if ($id_cliente <= 0 || $id_prestamo <= 0) {
+        echo json_encode(['ok' => false, 'msg' => 'Parámetros inválidos']);
+        return;
+    }
+    if (
+        !isset($_FILES['archivo']) ||
+        ($_FILES['archivo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+    ) {
+        echo json_encode(['ok' => false, 'msg' => 'Archivo requerido']);
+        return;
+    }
+
+    // 1) Datos del cliente
+    $sqlCli = "SELECT c.id_cliente, dp.nombre, dp.apellido, di.numero_documento
+               FROM cliente c
+               JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
+               LEFT JOIN documento_identidad di ON di.id_datos_persona = dp.id_datos_persona
+               WHERE c.id_cliente = ? LIMIT 1";
+    $st = $conn->prepare($sqlCli);
+    $st->bind_param('i', $id_cliente);
+    $st->execute();
+    $cli = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    if (!$cli) {
+        echo json_encode(['ok' => false, 'msg' => 'Cliente no encontrado']);
+        return;
+    }
+
+    $nombre   = (string)($cli['nombre'] ?? '');
+    $apellido = (string)($cli['apellido'] ?? '');
+    $docRaw   = (string)($cli['numero_documento'] ?? '');
+
+    // Carpeta del cliente: limpiar caracteres no válidos
+    $docDir = preg_replace('/[^0-9A-Za-z]/', '', $docRaw);
+    if ($docDir === '') {
+        $docDir = 'CLI_' . $id_cliente;
+    }
+
+    // 2) Obtener número de préstamo por cliente (para el nombre del archivo)
+    $numLocal = null;
+
+    // a) Buscar en cliente_prestamo
+    if ($q = $conn->prepare("
+        SELECT numero_prestamo_cliente
+        FROM cliente_prestamo
+        WHERE id_prestamo = ?
+        LIMIT 1
+    ")) {
+        $q->bind_param('i', $id_prestamo);
+        $q->execute();
+        $r = $q->get_result()->fetch_assoc();
+        $q->close();
+        if ($r && isset($r['numero_prestamo_cliente'])) {
+            $numLocal = (int)$r['numero_prestamo_cliente'];
+        }
+    }
+
+    // b) Fallback: columna prestamo.numero_prestamo_cliente (si existe)
+    if (!$numLocal) {
+        $hasCol = false;
+        if ($chk = $conn->prepare("
+            SELECT COUNT(*) AS n
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name   = 'prestamo'
+              AND column_name  = 'numero_prestamo_cliente'
+        ")) {
+            $chk->execute();
+            $c = $chk->get_result()->fetch_assoc();
+            $chk->close();
+            $hasCol = (int)($c['n'] ?? 0) > 0;
+        }
+        if ($hasCol) {
+            if ($q2 = $conn->prepare("
+                SELECT numero_prestamo_cliente
+                FROM prestamo
+                WHERE id_prestamo = ?
+                LIMIT 1
+            ")) {
+                $q2->bind_param('i', $id_prestamo);
+                $q2->execute();
+                $r2 = $q2->get_result()->fetch_assoc();
+                $q2->close();
+                if ($r2 && isset($r2['numero_prestamo_cliente'])) {
+                    $numLocal = (int)$r2['numero_prestamo_cliente'];
+                }
+            }
+        }
+    }
+
+    // c) Si no hay número local, usar id_prestamo como respaldo
+    $numeroSecuencial = $numLocal ?: $id_prestamo;
+
+    // 3) Carpeta del préstamo: IGUAL que en pagos => PRESTAMO_{id_prestamo}
+    //    .../uploads/clientes/{DOC_CLIENTE}/PRESTAMO_{id_prestamo}
+    $carpetaPrestamo = 'PRESTAMO_' . $id_prestamo;
+
+    // Paths base
+    $baseDir = __DIR__ . '/../uploads/clientes';
+    if (!is_dir($baseDir)) {
+        @mkdir($baseDir, 0777, true);
+    }
+
+    $clienteDir = $baseDir . DIRECTORY_SEPARATOR . $docDir;
+    if (!is_dir($clienteDir)) {
+        @mkdir($clienteDir, 0777, true);
+    }
+
+    $prestamoDir = $clienteDir . DIRECTORY_SEPARATOR . $carpetaPrestamo;
+    if (!is_dir($prestamoDir)) {
+        @mkdir($prestamoDir, 0777, true);
+    }
+
+    // 4) Validar extensión y armar nombre descriptivo
+    $allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+    $orig    = (string)($_FILES['archivo']['name'] ?? '');
+    $ext     = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed, true)) {
+        echo json_encode(['ok' => false, 'msg' => 'Extensión no permitida (solo PDF/JPG/PNG)']);
+        return;
+    }
+
+    $tipo   = _san($tipo_arch);                // CONTRATO / GARANTIA / SEGURO / OTRO
+    $nomCli = _san($nombre . '_' . $apellido); // Juan_Perez
+
+    // Nombre de archivo descriptivo:
+    //   CONTRATO_Prestamo3_Juan_Perez_00300011123_45_20251211_183215.pdf
+    $fileOut = sprintf(
+        '%s_Prestamo%d_%s_%s_%d_%s.%s',
+        $tipo,                 // CONTRATO / GARANTIA / ...
+        $numeroSecuencial,     // número de préstamo para este cliente
+        $nomCli,               // Juan_Perez
+        $docDir,               // 00300011123
+        $id_prestamo,          // ID real del préstamo
+        date('Ymd_His'),       // timestamp
+        $ext
+    );
+
+    $destAbs = $prestamoDir . DIRECTORY_SEPARATOR . $fileOut;
+
+    if (!move_uploaded_file($_FILES['archivo']['tmp_name'], $destAbs)) {
+        echo json_encode(['ok' => false, 'msg' => 'No se pudo guardar el archivo']);
+        return;
+    }
+
+    // 5) Respuesta
+    $pathRel = 'uploads/clientes/' . $docDir . '/' . $carpetaPrestamo . '/' . $fileOut;
+
+    echo json_encode([
+        'ok'               => true,
+        'msg'              => 'Documento subido',
+        'path'             => $pathRel,
+        'carpeta_prestamo' => $carpetaPrestamo,
+        'numero_prestamo'  => $numeroSecuencial,
+        'id_prestamo'      => $id_prestamo,
+        'id_cliente'       => $id_cliente,
+        'nombre_archivo'   => $fileOut
+    ]);
+}
+
+
 // Buscar clientes
 if ($act==='buscar_cliente'){
   $q = trim($_POST['q'] ?? '');
