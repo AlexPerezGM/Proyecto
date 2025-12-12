@@ -418,62 +418,45 @@
       }
     });
 
-    // Botón "Agregar documento" – SUBIR archivo al backend
-    const btnAgregar = overlay.querySelector('#btnAgregarDocPrestamo');
-    if (btnAgregar) {
-      btnAgregar.addEventListener('click', async () => {
-        try {
-          if (!prestamo.id_cliente || !prestamo.id_prestamo) {
-            alert('No se encontró el cliente o el préstamo asociado.');
-            return;
-          }
+    // Botón "Agregar documento" – SUBIR archivo al backend (carpeta PRESTAMO_X)
+// Dentro de abrirModalDocsPrestamo(prestamo) ...
+const btnAgregar = overlay.querySelector('#btnAgregarDocPrestamo');
+if (btnAgregar) {
+  btnAgregar.addEventListener('click', async () => {
+    try {
+      if (!prestamo.id_cliente || !prestamo.id_prestamo) {
+        alert('No se encontró el cliente o el préstamo asociado.');
+        return;
+      }
+      const tipoSelect = overlay.querySelector('#doc_tipo_prestamo');
+      const fileInput  = overlay.querySelector('#doc_archivo_prestamo');
 
-          const tipoSelect = overlay.querySelector('#doc_tipo_prestamo');
-          const fileInput = overlay.querySelector('#doc_archivo_prestamo');
+      if (!tipoSelect?.value) { alert('Selecciona el tipo de documento.'); return; }
+      if (!fileInput?.files?.length) { alert('Selecciona un archivo.'); return; }
 
-          if (!tipoSelect || !fileInput) {
-            alert('No se encontró el formulario de documentos.');
-            return;
-          }
+      const fd = new FormData();
+      fd.append('action', 'upload_doc');
+      fd.append('id_cliente',  prestamo.id_cliente);
+      fd.append('id_prestamo', prestamo.id_prestamo);
+      fd.append('tipo_archivo', tipoSelect.value);   // CONTRATO / GARANTIA / SEGURO / OTRO
+      fd.append('archivo', fileInput.files[0]);
 
-          if (!tipoSelect.value) {
-            alert('Selecciona el tipo de documento.');
-            return;
-          }
+      // Llamada directa a la API de préstamos (NO clientes, NO pagos)
+      const res = await jsonFetch(API, fd);
+      if (!res.ok) throw new Error(res.msg || 'Error al subir documento');
 
-          if (!fileInput.files || !fileInput.files.length) {
-            alert('Selecciona un archivo.');
-            return;
-          }
+      alert(`Documento subido a ${res.codigo_prestamo}.\nArchivo: ${res.nombre_archivo}`);
+      tipoSelect.value = '';
+      fileInput.value  = '';
 
-          const file = fileInput.files[0];
-
-          const fd = new FormData();
-          fd.append('action', 'upload_doc');
-          fd.append('id_cliente', prestamo.id_cliente);
-          fd.append('id_prestamo', prestamo.id_prestamo); // para que el PHP lo meta en la carpeta del préstamo
-          fd.append('tipo_archivo', tipoSelect.value);
-          fd.append('archivo', file);
-
-          // Opcional: enviar nombre/apellido/documento si el backend los usa
-          if (prestamo.nombre) fd.append('nombre', prestamo.nombre);
-          if (prestamo.apellido) fd.append('apellido', prestamo.apellido);
-          if (prestamo.numero_documento) fd.append('numero_documento', prestamo.numero_documento);
-
-          const res = await jsonFetch(API_CLIENTES, fd);
-          if (!res.ok) {
-            throw new Error(res.error || res.msg || 'Error al subir documento');
-          }
-
-          alert('Documento del préstamo subido correctamente.');
-          tipoSelect.value = '';
-          fileInput.value = '';
-        } catch (err) {
-          console.error(err);
-          alert(err.message || 'Error al subir el documento del préstamo.');
-        }
-      });
+      // Opcional: refrescar visor de documentos si lo tienes en pantalla
+      // reloadDocsPrestamo(prestamo.id_prestamo);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Error al subir el documento del préstamo.');
     }
+  });
+}
 
     // Botón "Abrir documentos del cliente" – nueva pestaña
     const btnAbrir = overlay.querySelector('#btnAbrirDocsClienteDesdePrestamo');
