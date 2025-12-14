@@ -758,10 +758,10 @@ CREATE TABLE asistencia_empleado(
 CREATE TABLE nomina (
     id_nomina INT AUTO_INCREMENT PRIMARY KEY,
     periodo VARCHAR(50) NOT NULL,
-    fecha_inicio DATE NULL AFTER periodo,
-    fecha_fin DATE NULL AFTER fecha_inicio,
-    fecha_pago DATE NULL AFTER fecha_fin,
-    tipo_frecuencia ENUM('Mensual', 'Quincenal') DEFAULT 'Mensual' AFTER fecha_pago,
+    fecha_inicio DATE NULL,
+    fecha_fin DATE NULL,
+    fecha_pago DATE NULL,
+    tipo_frecuencia ENUM('Mensual', 'Quincenal') DEFAULT 'Mensual',
     generado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )ENGINE = INNODB;
 
@@ -1655,7 +1655,6 @@ CREATE PROCEDURE generar_nomina_empleado(
     IN p_fecha_fin DATE,
     IN p_fecha_pago DATE,
     IN p_frecuencia VARCHAR(20)
-    IN p_periodo VARCHAR(7)
 )
 BEGIN
     DECLARE v_id_nomina INT;
