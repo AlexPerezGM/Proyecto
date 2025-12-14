@@ -1030,7 +1030,7 @@ CREATE TABLE registro_cancelacion(
     observacion TEXT,
     realizado_por INT,
     CONSTRAINT fk_prestamo_cancelacion FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
-    CONSTRAINT fk_politica_cancelacion FOREIGN KEY (id_politica_aplicada) REFERENCES cat_politica_cancelacion(id_politica_cancelacion),
+    CONSTRAINT fk_politica_cancelacion FOREIGN KEY (id_politica_aplicada) REFERENCES politicas_cancelacion(id_politica_cancelacion),
     CONSTRAINT fk_usuario_cancelacion FOREIGN KEY (realizado_por) REFERENCES usuario(id_usuario)
 )ENGINE = INNODB;
 
