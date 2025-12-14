@@ -1037,7 +1037,7 @@ CREATE TABLE registro_cancelacion(
 
 CREATE TABLE ejecucion_garantia(
     id_ejecucion INT AUTO_INCREMENT PRIMARY KEY,
-    id_garantia INT,
+    id_prestamo INT NOT NULL,
     id_garantia INT,
     fecha_ejecucion DATE NOT NULL,
     valor_adjudicado DECIMAL(14,2) NOT NULL,
