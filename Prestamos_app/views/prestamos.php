@@ -15,6 +15,12 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 $BASE = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $BASE = preg_replace('#/views$#','', $BASE);
 $BASE = ($BASE === '' ? '/' : $BASE . '/');
+
+$qGeneros = $conn->query("SELECT id_genero, genero FROM cat_genero ORDER BY id_genero");
+$catGeneros = $qGeneros ? $qGeneros->fetch_all(MYSQLI_ASSOC) : [];
+
+$qDocs = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_tipo_documento ORDER BY id_tipo_documento");
+$catDocs = $qDocs ? $qDocs->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 <!doctype html>
 <html lang="es">
@@ -144,6 +150,18 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
               <div id="resClientes"></div>
             </div>
             <div id="boxInfoCliente" class="panel hidden" style="margin-top:12px;">
+            <div id="wrapper_garantia_hipo" style="display:none; margin-top:12px;">
+              <div class="grid-2">
+                <div>
+                  <label class="mini">Valor estimado de la garantía</label>
+                  <input class="input" name="valor_garantia_hipo" type="number" step="0.01" placeholder="0.00">
+                </div>
+                <div>
+                  <label class="mini">Descripción de la garantía</label>
+                  <input class="input" name="descripcion_garantia_hipo" placeholder="Detalles de la garantía">
+                </div>
+              </div>
+            </div>
               <h4 style="margin-top:0;">Información del cliente</h4>
               <div class="info-grid" id="infoClienteGrid"></div>
               <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -336,128 +354,251 @@ $BASE = ($BASE === '' ? '/' : $BASE . '/');
 </div>
 <!-- Solicitud préstamo personal -->
 <div class="modal" id="modalPersonal">
-  <div class="modal__dialog">
+  <div class="modal__dialog" style="max-width:800px;">
     <div class="modal__header">
-      <h4 style="margin:0;">Préstamo personal</h4>
+      <h4 style="margin:0;">Solicitud de préstamo personal</h4>
       <button class="modal__close" data-close>Salir</button>
     </div>
     <div class="modal__body">
       <form id="frmPersonal">
         <input type="hidden" name="action" value="crear_personal">
         <input type="hidden" name="id_cliente" id="id_cliente_personal">
-        <div class="grid-2">
-          <div>
-            <label class="mini">Monto solicitado</label>
-            <input class="input" name="monto_solicitado" id="monto_personal" type="number" step="0.01" min="10000" required>
+
+        <div class="tabs">
+          <button type="button" class="tab-btn active" data-tab="p-datos">Datos del prestamo</button>
+          <button type="button" class="tab-btn" data-tab="p-finansas">Datos financieros</button>
+          <button type="button" class="tab-btn" data-tab="p-motivo">Garantía/Garante</button>
+        </div>
+
+        <div class="tab-contents">
+          <div class="tab-pane show" id="p-datos">
+            <div class="grid-2">
+              <div>
+                <label class="mini">Monto solicitado</label>
+                <input class="input" name="monto_solicitado" id="monto_personal" type="number" step="0.01" min="10000" required>
+              </div>
+              <div>
+                <label class="mini">Tasa interés (%)</label>
+                <input class="input" name="tasa_interes" id="tasa_personal" type="number" step="0.01" required readonly>
+              </div>
+              <div>
+                <label class="mini">Plazo (meses)</label>
+                <select class="input" name="plazo_meses" id="plazo_personal" required></select>
+              </div>
+              <div>
+                <label class="mini">Frecuencia de pagos</label>
+                <select class="input" name="id_periodo_pago" id="per_personal" required></select>
+              </div>
+              <div>
+                <label class="mini">Tipo de amortización</label>
+                <select class="input" name="id_tipo_amortizacion" id="amort_personal" required></select>
+              </div>
+              <div>
+                <label class="mini">Fecha solicitud</label>
+                <input class="input" name="fecha_solicitud" type="date" required value="<?= date('Y-m-d') ?>">
+              </div>
+              <div>
+                <label class="mini">Motivo del préstamo</label>
+                <input class="input" name="motivo" placeholder="Ej: Gastos médicos, educación, etc.">
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mini">Tasa interés (%)</label>
-            <input class="input" name="tasa_interes" id="tasa_personal" type="number" step="0.01" required readonly>
+
+          <div class="tab-pane" id="p-finansas">
+            <div class="info-group" style="border-left-color: #f59e0b;">
+              <h4 style="margin-top:0; color:#f59e0b;">Información financiera del cliente</h4>
+              <div class="info-grid" id="infoFinanciera"></div>
+              <div class="grid-2">
+                <div>
+                  <label class="mini"> Score crediticio</label>
+                  <input type="number" id="p_score" name="score" class= "input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Deuda externa</label>
+                  <input type="number" id="p_deuda_externa" name="deuda_externa" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Porcentaje de uso de tarjetas</label>
+                  <input type="number" id="p_uso_tarjetas" name="uso_tarjetas" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Cantidad de productos (tarjetas y otros)</label>
+                  <input type="number" id="p_cantidad_productos" name="cantidad_productos" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Nivel de riesgo</label>
+                  <input type="text" id="p_nivel_riesgo" name="nivel_riesgo" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Gastos mensuales</label>
+                  <input type="number" name="gastos_mensuales" class="input" placeholder="Suma de gastos mensuales" required>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mini">Plazo (meses)</label>
-            <select class="input" name="plazo_meses" id="plazo_personal" required></select>
-          </div>
-          <div>
-            <label class="mini">Fecha solicitud</label>
-            <input class="input" name="fecha_solicitud" type="date" required value="<?= date('Y-m-d') ?>">
-          </div>
-          <div>
-            <label class="mini">Tipo de amortización</label>
-            <select class="input" name="id_tipo_amortizacion" id="amort_personal" required></select>
-          </div>
-          <div>
-            <label class="mini">Tipo de garantía</label>
-            <select class="input" name="tipo_garantia" id="garantia_personal" required></select>
-          </div>
-          <div>
-            <label class="mini">Descripcion de la garantia</label>
-            <input class="input" name="descripcion_garantia" placeholder="Describa la garantia">
-          </div>
-          <div>
-            <label class="mini">Frecuencia de pagos</label>
-            <select class="input" name="id_periodo_pago" id="per_personal" required></select>
-          </div>
-          <div>
-            <label class="mini">Motivo del préstamo</label>
-            <input class="input" name="motivo" placeholder="Ej: Gastos médicos, educación, etc.">
+
+          <div class="tab-pane" id="p-motivo">
+              <div style="background:#e0f2fe; padding:10px; border-radius: 8px">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold;">
+                <input id="check_tiene_garantia_p" type="checkbox" name="tiene_garantia" value="1">
+                Necesita garantia o garante?
+              </label>
+            </div>
+
+            <div id="wrapper_garantia_personal" style="display:none; margin-top:15px;">
+              <div class="grid-2">
+                <div>
+                  <label class="mini">Tipo de garantía</label>
+                  <select class="input" name="tipo_garantia" id="garantia_personal"></select>
+                </div>
+                <div>
+                  <label class="mini">Valor estimado garantía</label>
+                  <input class="input" name="valor_garantia" type="number" placeholder="0.00">
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="mini">Descripción detallada</label>
+                <textarea class="input" name="descripcion_garantia" rows="2" placeholder="Marca, modelo, número de registro, etc."></textarea>
+              </div>
+            </div>
           </div>
         </div>
-        <div>
-          <label class="mini">Politica de cancelacion</label>
-          <select class="input" name="id_politica_cancelacion" id="politica_personal" required></select>
-        </div>
+
         <div class="modal__footer">
-          <button class="btn" type="submit">Crear préstamo</button>
+          <div style="flex:1; text-align:left;">
+            <label class="mini">Politica de cancelacion</label>
+            <select class="input" name="id_politica_cancelacion" id="politica_personal" required></select>
+          </div>
+          <button class="btn" type="submit">Evaluar prestamo</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
 <!-- Solicitud préstamo hipotecario -->
 <div class="modal" id="modalHipotecario">
-  <div class="modal__dialog">
+  <div class="modal__dialog" style="max-width:800px;">
     <div class="modal__header">
-      <h4 style="margin:0;">Préstamo hipotecario</h4>
+      <h4 style="margin:0;">Solicitud de préstamo hipotecario</h4>
       <button class="modal__close" data-close>Salir</button>
     </div>
     <div class="modal__body">
       <form id="frmHipotecario">
         <input type="hidden" name="action" value="crear_hipotecario">
-        <input type="hidden" name="id_cliente" id="id_cliente_hipo">  
-        <div class="grid-2">
-          <div>
-            <label class="mini">Monto solicitado</label>
-            <input class="input" name="monto_solicitado" id="monto_hipo" type="number" step="0.01" min="10000" required>
+        <input type="hidden" name="id_cliente" id="id_cliente_hipo">
+
+        <div class="tabs">
+          <button type="button" class="tab-btn active" data-tab="h-datos">Datos del prestamo</button>
+          <button type="button" class="tab-btn" data-tab="h-finansas">Datos financieros</button>
+          <button type="button" class="tab-btn" data-tab="h-inmueble">Datos Inmueble</button>
+        </div>
+
+        <div class="tab-contents">
+          <div class="tab-pane show" id="h-datos">
+            <div class="grid-2">
+              <div>
+                <label class="mini">Monto solicitado</label>
+                <input class="input" name="monto_solicitado" id="monto_hipo" type="number" step="0.01" min="10000" required>
+              </div>
+              <div>
+                <label class="mini">Tasa interés (%)</label>
+                <input class="input" name="tasa_interes" id="tasa_hipo" type="number" step="0.01" required readonly>
+              </div>
+              <div>
+                <label class="mini">Plazo (meses)</label>
+                <select class="input" name="plazo_meses" id="plazo_hipo" required></select>
+              </div>
+              <div>
+                <label class="mini">Frecuencia de pagos</label>
+                <select class="input" name="id_periodo_pago" id="per_hipo" required></select>
+              </div>
+              <div>
+                <label class="mini">Tipo de amortización</label>
+                <select class="input" name="id_tipo_amortizacion" id="amort_hipo" required></select>
+              </div>
+              <div>
+                <label class="mini">Fecha solicitud</label>
+                <input class="input" name="fecha_solicitud" type="date" required value="<?= date('Y-m-d') ?>">
+              </div>
+              <div>
+                <label class="mini">Tipo de garantía</label>
+                <select class="input" name="tipo_garantia" id="garantia_hipo" required></select>
+              </div>
+              <div>
+                <label class="mini">Dirección del inmueble</label>
+                <input class="input" name="direccion_propiedad" placeholder="Dirección completa del inmueble">
+              </div>
+              <div>
+                <label class="mini">Valor del bien a financiar</label>
+                <input class="input" name="valor_propiedad" id="valor_inmueble" type="number" step="0.01" required>
+              </div>
+              <div>
+                <label class="mini">Porcentaje a financiar</label>
+                <input class="input" name="porcentaje_financiamiento" id="porc_fin" type="number" min="0" max="80" step="0.01" required readonly>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mini">Tasa interés (%)</label>
-            <input class="input" name="tasa_interes" id="tasa_hipo" type="number" step="0.01" required readonly>
+
+          <div class="tab-pane" id="h-finansas">
+            <div class="info-group" style="border-left-color: #f59e0b;">
+              <h4 style="margin-top:0; color:#f59e0b;">Información financiera del cliente</h4>
+              <div class="info-grid" id="infoFinancieraHipo"></div>
+              <div class="grid-2">
+                <div>
+                  <label class="mini"> Score crediticio</label>
+                  <input type="number" id="h_score" name="Score" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Deuda externa</label>
+                  <input type="number" id="h_deuda_externa" name="deuda_externa" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Porcentaje de uso de tarjetas</label>
+                  <input type="number" id="h_uso_tarjetas" name="uso_tarjetas" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Cantidad de productos (tarjetas y otros)</label>
+                  <input type="number" id="h_cantidad_productos" name="cantidad_productos" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Nivel de riesgo</label>
+                  <input type="text" id="h_nivel_riesgo" name="nivel_riesgo" class="input" readonly>
+                </div>
+                <div>
+                  <label class="mini">Gastos mensuales</label>
+                  <input type="number" name="gastos_mensuales" class="input" placeholder="Suma de gastos mensuales" required>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mini">Plazo (meses)</label>
-            <select class="input" name="plazo_meses" id="plazo_hipo" required></select>
+
+          <div class="tab-pane" id="h-inmueble">
+            <div class="grid-2">
+              <div>
+                <label class="mini">Dirección</label>
+                <input class="input" name="direccion_inmueble" placeholder="Dirección del inmueble">
+              </div>
+              <div>
+                <label class="mini">Registro/Referencia</label>
+                <input class="input" name="referencia_inmueble" placeholder="Referencia / número de registro">
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mini">Fecha solicitud</label>
-            <input class="input" name="fecha_solicitud" type="date" required value="<?= date('Y-m-d') ?>">
-          </div>
-          <div>
-            <label class="mini">Tipo de amortización</label>
-            <select class="input" name="id_tipo_amortizacion" id="amort_hipo" required></select>
-          </div>
-          <div>
-            <label class="mini">Tipo de garantía</label>
-            <select class="input" name="tipo_garantia" id="garantia_hipo" required></select>
-          </div>
-          <div>
-            <label class="mini">Frecuencia de pagos</label>
-            <select class="input" name="id_periodo_pago" id="per_hipo" required></select>
-          </div>
-          <div>
-            <label class="mini">Dirección del inmueble</label>
-            <input class="input" name="direccion_propiedad" placeholder="Dirección completa del inmueble">
-          </div>
-          <div>
-            <label class="mini">Valor del bien a financiar</label>
-            <input class="input" name="valor_propiedad" id="valor_inmueble" type="number" step="0.01" required>
-          </div>
-          <div>
-            <label class="mini">Porcentaje a financiar</label>
-            <input class="input" name="porcentaje_financiamiento" id="porc_fin" type="number" min="0" max="80" step="0.01" required readonly>
-          </div>
-          <div>
+        </div>
+
+        <div class="modal__footer">
+          <div style="flex:1; text-align:left;">
             <label class="mini">Politica de cancelacion</label>
             <select class="input" name="id_politica_cancelacion" id="politica_hipo" required></select>
           </div>
-        </div>
-        <div class="modal__footer">
-          <button class="btn" type="submit">Crear préstamo</button>
+          <button class="btn" type="submit">Evaluar préstamo</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
 <div class="modal" id="modalVerPrestamo">
   <div class="modal__dialog">
     <div class="modal__header">

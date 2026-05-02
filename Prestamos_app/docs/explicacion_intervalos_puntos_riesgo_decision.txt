@@ -1,0 +1,289 @@
+EXPLICACION PASO A PASO
+CONFIGURAR INTERVALO DE PUNTOS PARA DECISION Y ASIGNACION DE RIESGO
+
+Objetivo en palabras simples
+Este modulo permite definir reglas para que el sistema tome dos resultados automaticos cuando evalua una solicitud:
+1) Que nivel de riesgo tiene el cliente (Bajo, Medio, Alto, etc.).
+2) Que decision tomar (Aprobado, Rechazado, Contrapropuesta, Revision manual, etc.).
+
+La idea es muy simple: segun el puntaje obtenido en la evaluacion, el sistema busca en que rango cae ese puntaje y asigna el resultado correspondiente.
+
+====================================================
+1. Donde lo ve el usuario en pantalla
+====================================================
+En la vista de configuracion existe una pestana llamada:
+- Intervalos de Evaluacion
+
+Dentro de esa pestana hay dos tablas:
+- Intervalos de Riesgo
+- Intervalos de decision
+
+Cada tabla tiene boton Agregar y acciones para Editar o Eliminar.
+
+Tambien hay dos formularios (modales):
+- modalIntervaloRiesgo
+- modalIntervaloDecision
+
+En esos formularios se llenan estos campos:
+- puntaje_minimo
+- puntaje_maximo
+- id_nivel_riesgo o id_decision_evaluacion
+- prioridad
+- estado (Activo/Inactivo)
+- vigente_desde
+- vigente_hasta
+
+Resumen: desde aqui el usuario configura como traducir un puntaje a un riesgo y a una decision.
+
+====================================================
+2. Que hace el JavaScript en configuracion
+====================================================
+El archivo de interfaz carga y maneja todo el ciclo de vida de estos intervalos.
+
+2.1 Carga inicial de datos
+Cuando se abre la pestana correspondiente, se ejecutan funciones para traer la informacion:
+- loadIntervaloRiesgo()
+- loadIntervaloDecision()
+
+Estas funciones llaman a la API, reciben la lista y pintan las filas de las tablas.
+
+2.2 Editar un intervalo
+Cuando el usuario pulsa Editar:
+- se vuelve a pedir la lista a la API,
+- se busca el registro por su id,
+- se llenan los campos del formulario,
+- se abre el modal.
+
+2.3 Guardar un intervalo
+Al enviar el formulario:
+- se recogen los datos,
+- se valida que puntaje_minimo no sea mayor que puntaje_maximo,
+- se envia a la API para guardar,
+- se cierra el modal,
+- se limpia el formulario,
+- se recarga la tabla.
+
+2.4 Eliminar un intervalo
+Al pulsar Eliminar:
+- se pide confirmacion,
+- se llama a la API para borrar,
+- se recarga la tabla.
+
+Resumen: el frontend se encarga de mostrar, editar y validar lo basico antes de enviar.
+
+====================================================
+3. Que hace la API de configuracion
+====================================================
+La API recibe dos datos clave:
+- module
+- action
+
+Si module es intervalo_riesgo, usa handleIntervaloRiesgo().
+Si module es intervalo_decision, usa handleIntervaloDecision().
+
+Cada uno maneja 3 acciones:
+- list: listar registros
+- save: crear o actualizar
+- delete: eliminar
+
+3.1 Validaciones importantes en guardado
+Para riesgo y decision la API valida:
+- Que puntaje_minimo <= puntaje_maximo.
+- Que no se crucen intervalos activos entre si (no overlap) para evitar ambiguedad.
+
+Si hay cruce de rangos activos, responde con error.
+
+3.2 Crear vs actualizar
+- Si llega id > 0, actualiza ese registro.
+- Si no llega id, inserta un registro nuevo.
+
+3.3 Orden de salida
+Al listar, la API ordena por:
+1) prioridad ASC
+2) puntaje_minimo ASC
+
+Eso mantiene un orden claro para visualizar y para entender que regla pesa primero.
+
+====================================================
+4. Como queda guardado en base de datos
+====================================================
+Se usan dos tablas principales de configuracion:
+
+4.1 configuracion_intervalo_riesgo
+Columnas principales:
+- id_intervalo_riesgo
+- puntaje_minimo
+- puntaje_maximo
+- id_nivel_riesgo (apunta al catalogo de niveles)
+- prioridad
+- estado
+- vigente_desde
+- vigente_hasta
+
+Incluye reglas de integridad:
+- llave foranea con cat_nivel_riesgo
+- check para que minimo <= maximo
+
+4.2 configuracion_intervalo_decision
+Columnas principales:
+- id_intervalo_decision
+- puntaje_minimo
+- puntaje_maximo
+- id_decision_evaluacion (apunta al catalogo de decisiones)
+- prioridad
+- estado
+- vigente_desde
+- vigente_hasta
+
+Incluye reglas de integridad:
+- llave foranea con cat_decision_evaluacion
+- check para que minimo <= maximo
+
+4.3 Catalogos asociados
+- cat_nivel_riesgo: define niveles (Bajo, Medio, Alto, etc.)
+- cat_decision_evaluacion: define decisiones (APROBADO, RECHAZADO, CONTRAPROPUESTA, REVISION_MANUAL, etc.)
+
+====================================================
+5. Como se usa esta configuracion durante la evaluacion real
+====================================================
+En el proceso de evaluar prestamo se hacen dos consultas:
+
+5.1 Asignar nivel de riesgo
+La funcion obtener_nivel_riesgo() busca un intervalo activo y vigente donde:
+- el puntaje este entre minimo y maximo
+
+Si encuentra varios posibles, prioriza por prioridad mas baja (mas importante) y luego por id.
+
+Si no encuentra ninguno exacto, aplica un fallback:
+- busca el intervalo activo/vigente mas cercano al puntaje,
+- si aun no hay datos, toma un nivel por defecto del catalogo.
+
+Resultado: siempre devuelve un nivel de riesgo.
+
+5.2 Asignar decision
+La funcion obtener_decision() busca un intervalo de decision activo y vigente donde:
+- el puntaje este entre minimo y maximo
+
+Tambien ordena por prioridad y luego id para desempatar.
+
+Si no encuentra coincidencia, devuelve por defecto:
+- REVISION_MANUAL
+
+Resultado: siempre hay una decision, aunque no exista coincidencia exacta.
+
+====================================================
+6. De donde salen los datos que determinan la decision
+====================================================
+La decision final no nace de un solo dato. Sale de combinar:
+
+6.1 Datos para construir el puntaje
+Primero, el sistema calcula un puntaje total usando reglas activas de la tabla:
+- reglas_puntaje_interno
+
+Esas reglas se aplican sobre datos reales del cliente que se consultan en varias tablas, por ejemplo:
+- cliente y datos_persona (informacion general)
+- ingresos_egresos (ingresos y egresos)
+- ocupacion (tipo de trabajo)
+- puntaje_crediticio (score y nivel de riesgo historico)
+- evaluacion_estrategica y cat_tipo_vivienda (vivienda, dependientes, uso de credito, etc.)
+- cronograma_cuota y prestamo (comportamiento de pagos y atrasos)
+
+Con esos datos, el sistema suma y resta puntos por factores como:
+- estabilidad laboral
+- antiguedad
+- comportamiento de pago
+- uso de credito
+- vivienda
+- dependientes
+- relacion historica con la entidad
+
+El resultado de esa suma es el puntaje total del cliente.
+
+6.2 Datos para convertir puntaje en decision
+Con el puntaje total ya calculado, la decision se busca en:
+- configuracion_intervalo_decision (rangos de puntaje)
+- cat_decision_evaluacion (nombre/codigo de la decision)
+
+Solo se toman intervalos:
+- activos
+- vigentes por fecha
+
+Luego se selecciona el rango que contiene el puntaje.
+Si hay empate, manda la prioridad mas alta (numero mas pequeno).
+
+6.3 Reglas de negocio adicionales que tambien influyen
+Despues de obtener la decision por intervalo, el sistema aun revisa condiciones de negocio, por ejemplo:
+- capacidad de pago
+- nivel de endeudamiento
+- razones de rechazo detectadas
+
+Eso significa que, aunque el intervalo sugiera una decision, el sistema puede ajustar el resultado final segun estas validaciones.
+
+Resumen simple:
+- El puntaje sale de reglas + datos del cliente.
+- La decision base sale de intervalos de decision.
+- La decision final puede ajustarse por validaciones financieras.
+
+====================================================
+7. Rol de la prioridad y la vigencia (explicado facil)
+====================================================
+7.1 Prioridad
+Piensalo como un "orden de preferencia".
+- prioridad 1 se evalua antes que prioridad 2, 3, etc.
+
+Aunque idealmente no deberian existir choques de rango, la prioridad sirve para desempatar y mantener comportamiento consistente.
+
+7.2 Vigencia
+Permite programar reglas por fechas.
+- vigente_desde: desde cuando aplica la regla
+- vigente_hasta: hasta cuando aplica (o vacio para sin fecha fin)
+
+Esto facilita cambiar politicas en el tiempo sin borrar historial.
+
+====================================================
+8. Ejemplo practico sencillo
+====================================================
+Supongamos estos intervalos de decision activos y vigentes:
+- 80 a 100 => APROBADO
+- 40 a 79 => CONTRAPROPUESTA
+- 20 a 39 => REVISION_MANUAL
+- 0 a 19 => RECHAZADO
+
+Si un cliente obtiene 72:
+- cae en 40 a 79
+- la decision sera CONTRAPROPUESTA
+
+Para riesgo, si tienes:
+- 80 a 100 => Bajo
+- 50 a 79 => Medio
+- 0 a 49 => Alto
+
+Con 72, el riesgo sera Medio.
+
+====================================================
+9. Buenas practicas para administrarlo sin errores
+====================================================
+1) No dejar huecos de puntaje
+Si dejas huecos (ejemplo: 0-49 y 60-100), los puntajes intermedios no tendran regla exacta y entrara fallback.
+
+2) Evitar solapamientos
+No crear intervalos activos que se crucen en puntajes.
+
+3) Revisar fechas
+Si una regla no esta vigente por fecha, no se tomara en cuenta.
+
+4) Usar prioridad con criterio
+Dejar prioridad clara y ordenada (1,2,3...) facilita mantenimiento.
+
+5) Mantener catalogos consistentes
+Los IDs de nivel de riesgo y decision deben existir y estar activos.
+
+====================================================
+10. Flujo completo resumido en una linea
+====================================================
+Usuario configura rangos en Configuracion -> se guardan en tablas de intervalos -> al evaluar un prestamo, el sistema busca el rango que coincide con el puntaje -> asigna nivel de riesgo y decision automaticamente.
+
+====================================================
+11. Punto clave de negocio
+====================================================
+Este modulo convierte una evaluacion numerica (puntaje) en una accion de negocio concreta (riesgo + decision), por eso es una parte central para que la aprobacion de prestamos sea coherente, repetible y auditable.

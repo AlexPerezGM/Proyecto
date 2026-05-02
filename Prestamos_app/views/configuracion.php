@@ -24,7 +24,7 @@ $APP_BASE = $APP_BASE . '/';
   <title>Configuración del Sistema - Sistema de Préstamos</title>
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/dashboard.css">
   <link rel="stylesheet" href="<?= $APP_BASE ?>public/css/configuracion.css">
-  <script src="<?= $APP_BASE ?>public/js/configuracion.js"></script>
+  <script src="<?= $APP_BASE ?>public/JS/configuracion.js"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -107,6 +107,8 @@ $APP_BASE = $APP_BASE . '/';
       <div class="config-tabs">
         <button class="tab-btn active" data-tab="catalogos">Catálogos</button>
         <button class="tab-btn" data-tab="parametros">Parámetros del Sistema</button>
+        <button class="tab-btn" data-tab="evaluacion">Reglas de Evaluación</button>
+        <button class="tab-btn" data-tab="intervalos_evaluacion">Intervalos de Evaluación</button>
         <button class="tab-btn" data-tab="auditoria">Gestión de Auditoría</button>
         <button class="tab-btn" data-tab="fondos">Administración de Fondos y Caja</button>
       </div>
@@ -459,9 +461,115 @@ $APP_BASE = $APP_BASE . '/';
           </div>
         </div>
       </section>
+      <section id="evaluacion" class="config-section">
+        <div class="config-card">
+          <div class="config-card-header">
+            <h3>Reglas de puntaje interno</h3>
+          </div>
+          <div class ="config-card-body">
+            <div class="table-container">
+              <table id="tableReglaPuntaje" class="config-table">
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>Resumen</th>
+                    <th>Puntos</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="intervalos_evaluacion" class="config-section">
+        <div class = "config-card">
+          <div class= "config-card-header">
+            <h3>Intervalos de Riesgo</h3>
+            <button class="btn-primary" onclick="openModal('modalIntervaloRiesgo')">Agregar</button>
+          </div>
+          <div class="config-card-body">
+            <div class="table-container">
+              <table id="tableIntervaloRiesgo" class="config-table">
+                <thead>
+                  <tr>
+                    <th>puntaje minimo</th>
+                    <th>puntaje maximo</th>
+                    <th>nivel de riesgo</th>
+                    <th>prioridad</th>
+                    <th>estado</th>
+                    <th>acciones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          </div>
+          <div class = "config-card">
+            <div class= "config-card-header">
+              <h3>Intervalos de decision</h3>
+              <button class="btn-primary" onclick="openModal('modalIntervaloDecision')">Agregar</button>
+            </div>
+          <div class="config-card-body">
+            <div class="table-container">
+              <table id="tableIntervaloDecision" class="config-table">
+                <thead>
+                  <tr>
+                    <th>puntaje minimo</th>
+                    <th>puntaje maximo</th>
+                    <th>decision</th>
+                    <th>prioridad</th>
+                    <th>estado</th>
+                    <th>acciones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="modalReglaPuntaje" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3> Editar Pesos de reglas</h3>
+          </div>
+          <form id="formReglaPuntaje" onsubmit="saveReglaPuntaje(event)">
+            <input type="hidden" id="idRegla" name="id">
+            <div class = "form-group">
+              <label>Nombre de la regla:</label>
+              <input type="text" id="nombreRegla" name="nombre_regla" readonly style="background:#eee;">
+            </div>
+            <div class = "form-group">
+              <label>Categoria:</label>
+              <select id="categoriaRegla" name="id_categoria_regla" required></select>
+            </div>
+             <div class = "form-group">
+              <label>Puntos:</label>
+              <input type="number" id="puntosRegla" name="puntos" required>
+            </div>
+             <div class = "form-group">
+              <label>Estado:</label>
+              <select id="estadoRegla" name="estado" required>
+                <option value="Activo">Activo</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-secondary" onclick="closeModal('modalReglaPuntaje')">Cancelar</button>
+              <button type="submit" class="btn-primary">Guardar</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </main>
   </div>
 </div>
+
 <div id="modalDeduccion" class="modal">
   <div class="modal-content">
     <div class="modal-header">
@@ -785,6 +893,99 @@ $APP_BASE = $APP_BASE . '/';
       </div>
     </form>
   </div>
+</div>
+
+<div id="modalIntervaloRiesgo" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Intervalo de Riesgo</h3>
+    </div>
+    <form id="formIntervaloRiesgo" onsubmit="saveIntervaloRiesgo(event)">
+      <input type="hidden" id="idIntervaloRiesgo" name="id">
+      <div class="form-group">
+        <label>Puntaje Minimo:</label>
+        <input type="number" id="riesgoMin" name="puntaje_minimo" required>
+      </div>
+      <div class="form-group">
+        <label>Puntaje Maximo:</label>
+        <input type="number" id="riesgoMax" name="puntaje_maximo" required>
+      </div>
+      <div class="form-group">
+        <label>ID Nivel de Riesgo:</label>
+        <input type="number" id="idNivelRiesgo" name="id_nivel_riesgo" required min="1">
+      </div>
+      <div class="form-group">
+        <label>Prioridad:</label>
+        <input type="number" id="prioridadRiesgo" name="prioridad" required min="1">
+      </div>
+      <div class="form-group">
+        <label>Estado:</label>
+        <select id="estadoRiesgo" name="estado" required>
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Vigente desde:</label>
+        <input type="date" id="vigenteDesdeRiesgo" name="vigente_desde" required>
+      </div>
+      <div class="form-group">
+        <label>Vigente hasta:</label>
+        <input type="date" id="vigenteHastaRiesgo" name="vigente_hasta">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('modalIntervaloRiesgo')">Cancelar</button>
+        <button type="submit" class="btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modalIntervaloDecision" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Intervalo de decision</h3>
+    </div>
+    <form id="formIntervaloDecision" onsubmit="saveIntervaloDecision(event)">
+      <input type="hidden" id="idIntervaloDecision" name="id">
+      <div class="form-group">
+        <label>Puntaje Minimo:</label>
+        <input type="number" id="decisionMin" name="puntaje_minimo" required>
+      </div>
+      <div class="form-group">
+        <label>Puntaje Maximo:</label>
+        <input type="number" id="decisionMax" name="puntaje_maximo" required>
+      </div>
+      <div class="form-group">
+        <label>Decision:</label>
+        <input type="number" id="idDecisionEvaluacion" name="id_decision_evaluacion" required maxlength="50">
+      </div>
+      <div class="form-group">
+        <label>Prioridad:</label>
+        <input type="number" id="prioridadDecision" name="prioridad" value="100" required>
+      </div>
+      <div class="form-group">
+        <label>Estado:</label>
+        <select id="estadoDecision" name="estado">
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Vigente desde:</label>
+        <input type="date" id="vigenteDesdeDecision" name="vigente_desde" required>
+      </div>
+      <div class="form-group">
+        <label>Vigente hasta:</label>
+        <input type="date" id="vigenteHastaDecision" name="vigente_hasta">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('modalIntervaloDecision')">Cancelar</button>
+        <button type="submit" class="btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
 </div>
 </body>
 </html>

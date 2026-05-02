@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/autorizacion.php';
 
 function db(){
   if (isset($GLOBALS['mysqli']) && $GLOBALS['mysqli'] instanceof mysqli) return $GLOBALS['mysqli'];
@@ -19,6 +20,16 @@ function db(){
 }
 
 function j($arr){ echo json_encode($arr, JSON_UNESCAPED_UNICODE); exit; }
+
+if (!is_logged()) {
+  http_response_code(401);
+  j(['ok'=>false,'msg'=>'No autorizado.']);
+}
+
+if (!has_permission('seguimiento')) {
+  http_response_code(403);
+  j(['ok'=>false,'msg'=>'No autorizado.']);
+}
 
 $cn = db();
 $action = $_POST['action'] ?? '';
@@ -45,7 +56,7 @@ if ($action === 'list_loans'){
            SELECT ep.capacidad_pago 
            FROM evaluacion_prestamo ep 
            WHERE ep.id_prestamo = p.id_prestamo 
-           ORDER BY ep.fecha_evaluacion DESC 
+           ORDER BY ep.id_evaluacion_prestamo DESC 
            LIMIT 1
          ), (
            SELECT ie.ingresos_mensuales - ie.egresos_mensuales
@@ -111,7 +122,7 @@ if ($action === 'list_morosos'){
            SELECT ep.capacidad_pago 
            FROM evaluacion_prestamo ep 
            WHERE ep.id_prestamo = p.id_prestamo 
-           ORDER BY ep.fecha_evaluacion DESC 
+           ORDER BY ep.id_evaluacion_prestamo DESC 
            LIMIT 1
          ), (
            SELECT ie.ingresos_mensuales - ie.egresos_mensuales
@@ -186,6 +197,15 @@ if ($action === 'get_eval_data'){
   $st->execute();
   $fin = $st->get_result()->fetch_assoc() ?: ['ingresos_mensuales'=>0,'egresos_mensuales'=>0];
 
+  $cap = (float)$fin['ingresos_mensuales'] - (float)$fin['egresos_mensuales'];
+  $st = $cn->prepare("\n    SELECT capacidad_pago\n    FROM evaluacion_prestamo\n    WHERE id_prestamo = ?\n    ORDER BY id_evaluacion_prestamo DESC\n    LIMIT 1\n  ");
+  $st->bind_param('i', $id);
+  $st->execute();
+  $capRow = $st->get_result()->fetch_assoc();
+  if ($capRow && isset($capRow['capacidad_pago']) && $capRow['capacidad_pago'] !== null) {
+    $cap = (float)$capRow['capacidad_pago'];
+  }
+
   $riesgos = [];
   $rs = $cn->query("SELECT id_nivel_riesgo as id, nivel 
   FROM cat_nivel_riesgo 
@@ -196,6 +216,7 @@ if ($action === 'get_eval_data'){
      'cliente'=>['nombre'=>$row['nombre'],'apellido'=>$row['apellido']],
      'prestamo'=>['monto_solicitado'=>$row['monto_solicitado'],'id_cliente'=>$row['id_cliente']],
      'finanzas'=>$fin,
+      'capacidad_pago'=>round($cap, 2),
      'riesgos'=>$riesgos
   ]);
 }
@@ -203,9 +224,18 @@ if ($action === 'get_eval_data'){
 if ($action === 'decidir_evaluacion'){
   $id = (int)($_POST['id_prestamo'] ?? 0);
   $idRiesgo = (int)($_POST['id_nivel_riesgo'] ?? 0);
-  $decision = $_POST['decision'] ?? '';
+  $decision = trim((string)($_POST['decision'] ?? ''));
   if (!$id || !$decision) 
     j(['ok'=>false,'msg'=>'Parámetros incompletos']);
+
+  if ($decision === 'Contrapropuesta') {
+    j(['ok'=>false,'msg'=>'La opcion Contrapropuesta debe procesarse desde la evaluacion avanzada (api/Evaluar_prestamo.php), no desde Seguimiento.']);
+  }
+
+  $decisionesValidas = ['Aprobado', 'Rechazado'];
+  if (!in_array($decision, $decisionesValidas, true)) {
+    j(['ok'=>false,'msg'=>'Decisión inválida']);
+  }
 
   $st = $cn->prepare("SELECT p.id_cliente, p.monto_solicitado, p.id_estado_prestamo, ce.estado AS estado_nombre
                       FROM prestamo p
@@ -230,9 +260,26 @@ if ($action === 'decidir_evaluacion'){
   $fin = $st->get_result()->fetch_assoc() ?: ['ingresos_mensuales'=>0,'egresos_mensuales'=>0];
   $cap = (float)$fin['ingresos_mensuales'] - (float)$fin['egresos_mensuales'];
 
-  $st = $cn->prepare("INSERT INTO evaluacion_prestamo (id_cliente,id_prestamo,capacidad_pago,nivel_riesgo,estado_evaluacion,fecha_evaluacion)
-                      VALUES (?,?,?,?,?, CURRENT_DATE())");
-  $st->bind_param('iidis', $p['id_cliente'], $id, $cap, $idRiesgo, $decision);
+  $stCap = $cn->prepare("\n    SELECT capacidad_pago\n    FROM evaluacion_prestamo\n    WHERE id_prestamo = ?\n    ORDER BY id_evaluacion_prestamo DESC\n    LIMIT 1\n  ");
+  $stCap->bind_param('i', $id);
+  $stCap->execute();
+  $capRow = $stCap->get_result()->fetch_assoc();
+  if ($capRow && isset($capRow['capacidad_pago']) && $capRow['capacidad_pago'] !== null) {
+    $cap = (float)$capRow['capacidad_pago'];
+  }
+
+  $puntaje = 0;
+  if ($decision === 'Aprobado') {
+    $puntaje = 80;
+  } elseif ($decision === 'Contrapropuesta') {
+    $puntaje = 60;
+  } else {
+    $puntaje = 30;
+  }
+
+  $st = $cn->prepare("INSERT INTO evaluacion_prestamo (id_cliente,id_prestamo,capacidad_pago,puntaje_total,nivel_riesgo,estado_evaluacion,fecha_evaluacion)
+                      VALUES (?,?,?,?,?,?, CURRENT_DATE())");
+  $st->bind_param('iidiis', $p['id_cliente'], $id, $cap, $puntaje, $idRiesgo, $decision);
   $st->execute();
 
   $estadoNombre = ($decision === 'Aprobado') ? 'Desembolso' : 'Rechazado';
@@ -375,6 +422,33 @@ if ($action === 'notif_send'){
   j(['ok'=>true, 'msg'=>'Notificación enviada (simulación)']);
 }
 
+if ($action === 'lista_historial'){
+  $sql = "
+  SELECT 
+      ep.id_evaluacion_prestamo,
+      ep.id_prestamo,
+      ep.estado_evaluacion,
+      DATE_FORMAT(ep.fecha_evaluacion, '%d/%m/%Y') as fecha_evaluacion,
+      dp.nombre,
+      dp.apellido
+  FROM evaluacion_prestamo ep
+  JOIN prestamo p ON p.id_prestamo = ep.id_prestamo
+  JOIN cliente c ON c.id_cliente = p.id_cliente
+  JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
+  ORDER BY ep.id_evaluacion_prestamo DESC
+  LIMIT 10
+  ";
+  $st = $cn->prepare($sql);
+  if (!$st) {
+    http_response_code(500);
+    j(['ok'=>false, 'msg'=>'Error preparando historial de evaluaciones']);
+  }
+  $st->execute();
+  $rows = read($st);
+
+  j(['ok'=>true, 'data'=>$rows]);
+}
+
 if ($action === 'check_datacredito'){
   $id = (int)($_POST['id_prestamo'] ?? 0);
   if (!$id) j(['ok'=>false,'msg'=>'id_prestamo requerido']);
@@ -423,23 +497,46 @@ if ($action === 'check_datacredito'){
     }
   }
   $datacreditoData = json_decode($response, true);
-  if (!$datacreditoData || !$datacreditoData['ok']) {
+  if (!is_array($datacreditoData) || empty($datacreditoData['ok']) || empty($datacreditoData['data']) || !is_array($datacreditoData['data'])) {
     j(['ok'=>false,'msg'=>'Error en la respuesta del servicio de Datacrédito']);
   }
-  $score = $datacreditoData['data']['score'];
-  $resumen = $datacreditoData['data']['resumen_crediticio'];
+  $score = $datacreditoData['data']['score'] ?? [];
+  $resumen = $datacreditoData['data']['resumen_crediticio'] ?? [];
+  $detalleCuentas = $datacreditoData['data']['detalle_cuentas'] ?? [];
+  $historial24Meses = $datacreditoData['data']['historial_24_meses'] ?? [];
+
+  $prestamosActivos = isset($resumen['prestamos_activos'])
+    ? (int)$resumen['prestamos_activos']
+    : count($detalleCuentas['prestamos'] ?? []);
+  $tarjetasCredito = isset($resumen['tarjetas_credito'])
+    ? (int)$resumen['tarjetas_credito']
+    : count($detalleCuentas['tarjetas'] ?? []);
+  $lineasCredito = isset($resumen['lineas_credito'])
+    ? (int)$resumen['lineas_credito']
+    : (isset($resumen['cantidad_productos']) ? (int)$resumen['cantidad_productos'] : ($prestamosActivos + $tarjetasCredito));
+  $consultasRecientes = isset($resumen['consultas_recientes'])
+    ? (int)$resumen['consultas_recientes']
+    : (isset($resumen['consultas_ultimo_mes']) ? (int)$resumen['consultas_ultimo_mes'] : 0);
+
+  $atrasoMaximo = isset($resumen['atraso_maximo']) ? (int)$resumen['atraso_maximo'] : 0;
+  if ($atrasoMaximo === 0 && !empty($historial24Meses)) {
+    foreach ($historial24Meses as $h) {
+      $diasMora = (int)($h['dias_mora'] ?? 0);
+      if ($diasMora > $atrasoMaximo) $atrasoMaximo = $diasMora;
+    }
+  }
   $resultado = "=== REPORTE DATACRÉDITO ===\n";
   $resultado .= "Cliente: {$cliente['nombre']} {$cliente['apellido']}\n";
   $resultado .= "Cédula: {$cliente['cedula']}\n\n";
   $resultado .= "SCORE CREDITICIO:\n";
-  $resultado .= "Puntuación: {$score['valor']}/900\n";
-  $resultado .= "Nivel: {$score['nivel']} - {$score['riesgo']}\n\n";
+  $resultado .= "Puntuación: " . ($score['valor'] ?? 0) . "/900\n";
+  $resultado .= "Nivel: " . ($score['nivel'] ?? 'N/D') . " - " . ($score['riesgo'] ?? 'Sin clasificación') . "\n\n";
   $resultado .= "RESUMEN CREDITICIO:\n";
-  $resultado .= "Préstamos activos: {$resumen['prestamos_activos']}\n";
-  $resultado .= "Tarjetas de crédito: {$resumen['tarjetas_credito']}\n";
-  $resultado .= "Líneas de crédito: {$resumen['lineas_credito']}\n";
-  $resultado .= "Consultas recientes: {$resumen['consultas_recientes']}\n";
-  $resultado .= "Atraso máximo: {$resumen['atraso_maximo']} días\n\n";
+  $resultado .= "Préstamos activos: {$prestamosActivos}\n";
+  $resultado .= "Tarjetas de crédito: {$tarjetasCredito}\n";
+  $resultado .= "Líneas de crédito: {$lineasCredito}\n";
+  $resultado .= "Consultas recientes: {$consultasRecientes}\n";
+  $resultado .= "Atraso máximo: {$atrasoMaximo} días\n\n";
   
   if (!empty($datacreditoData['data']['alertas'])) {
     $resultado .= "ALERTAS:\n";
@@ -449,7 +546,8 @@ if ($action === 'check_datacredito'){
     $resultado .= "\n";
   }
   $recomendacion = "";
-  switch ($score['nivel']) {
+  $scoreNivel = $score['nivel'] ?? '';
+  switch ($scoreNivel) {
     case 'A':
       $recomendacion = "APROBADO - Excelente historial crediticio";
       break;
@@ -463,6 +561,11 @@ if ($action === 'check_datacredito'){
       $recomendacion = "RECHAZAR - Alto riesgo crediticio";
       break;
   }
+  $datacreditoData['data']['resumen_crediticio']['prestamos_activos'] = $prestamosActivos;
+  $datacreditoData['data']['resumen_crediticio']['tarjetas_credito'] = $tarjetasCredito;
+  $datacreditoData['data']['resumen_crediticio']['lineas_credito'] = $lineasCredito;
+  $datacreditoData['data']['resumen_crediticio']['consultas_recientes'] = $consultasRecientes;
+  $datacreditoData['data']['resumen_crediticio']['atraso_maximo'] = $atrasoMaximo;
   $datacreditoData['data']['resumen_crediticio']['recomendacion'] = $recomendacion;
   $datacreditoData['data']['cliente'] = [
     'nombre'  => $cliente['nombre'] ?? '',
@@ -470,7 +573,7 @@ if ($action === 'check_datacredito'){
     'cedula' => $cliente['cedula'] ?? ''
   ];
   $resultado .= $recomendacion;
-  $resultado .= "\n\nFuente: {$datacreditoData['data']['fuente']}";
+  $resultado .= "\n\nFuente: " . ($datacreditoData['data']['fuente'] ?? 'No disponible');
   
   j(['ok'=>true, 'resultado'=>$resultado, 'data_completa'=>$datacreditoData['data']]);
 }

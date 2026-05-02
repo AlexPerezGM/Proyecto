@@ -26,6 +26,10 @@
   const $errMorosos = document.getElementById('errorBoxMorosos');
   const $spinnerMorosos = document.getElementById('spinnerMorosos');
 
+  const $btnHistorial = document.getElementById('btnHistorial');
+  const $modalHistorial = document.getElementById('modalHistorial');
+  const $tablaHistorial = document.querySelector('#tablaHistorial tbody');
+
   // Evaluación
   let currentLoan = null;
   let curredtClientId = null;
@@ -73,6 +77,20 @@
       return n;
     }
   }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return map[ch] || ch;
+    });
+  }
+
   function showSpinner(v) {
     if (!$spinner)
       return;
@@ -156,6 +174,67 @@
       }
     }
   }));
+
+  if($btnHistorial){
+    $btnHistorial.addEventListener('click', async ()=>{
+      try {
+        const json = await jsonFetch(new URLSearchParams({ action: 'lista_historial'}));
+
+        if(json.ok) {
+          const rows = Array.isArray(json.data) ? json.data : [];
+          if(rows.length === 0 ) {
+            $tablaHistorial.innerHTML ='<tr><td colspan="5" style="text-align:center;">No hay evaluaciones registradas.</td></tr>';
+          } else {
+            $tablaHistorial.innerHTML = rows.map(r =>{
+              const estado = String(r.estado_evaluacion || 'Pendiente');
+              const pillClass = estado === 'Aprobado' ? 'activo' : (estado === 'Rechazado' ? 'mora' : 'pendiente');
+              const idPrestamo = Number.parseInt(r.id_prestamo, 10) || 0;
+              const idEvaluacion = Number.parseInt(r.id_evaluacion_prestamo, 10) || 0;
+              const cliente = `${r.nombre || ''} ${r.apellido || ''}`.trim();
+              return `
+                <tr>
+                  <td><strong>#${idPrestamo}</strong></td>
+                  <td>${escapeHtml(cliente)}</td>
+                  <td>${escapeHtml(r.fecha_evaluacion || '-')}</td>
+                  <td><span class="pill ${pillClass}">${escapeHtml(estado)}</span></td>
+                  <td style="text-align:right;">
+                    <button class="btn btn-light" data-ver-resultado="${idPrestamo}" data-id-evaluacion="${idEvaluacion}">Ver resultado</button>
+                  </td>
+                </tr>
+              `;
+            }).join('');
+          }
+          openModal($modalHistorial);
+        }
+      }catch(e) {
+        console.error('Error cargando historial de evaluaciones', e);
+      }
+    });
+  }
+
+  if ($tablaHistorial) {
+    $tablaHistorial.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-ver-resultado]');
+      if (!btn) {
+        return;
+      }
+
+      const idPrestamo = Number.parseInt(btn.getAttribute('data-ver-resultado') || '0', 10);
+      const idEvaluacion = Number.parseInt(btn.getAttribute('data-id-evaluacion') || '0', 10);
+
+      if (!Number.isFinite(idPrestamo) || idPrestamo <= 0) {
+        alert('No se pudo identificar el préstamo para abrir el resultado.');
+        return;
+      }
+
+      const qs = new URLSearchParams({ id_prestamo: String(idPrestamo) });
+      if (Number.isFinite(idEvaluacion) && idEvaluacion > 0) {
+        qs.set('id_evaluacion', String(idEvaluacion));
+      }
+
+      window.location.href = (window.APP_BASE || '/') + 'views/resultado_v.php?' + qs.toString();
+    });
+  }
 
   let currentPage = 1; let PAGE_SIZE = 10; let totalPages = 1;
   async function cargar(page = 1) {
@@ -279,7 +358,9 @@
       $evIngresos.textContent = money(json.finanzas?.ingresos_mensuales);
       $evEgresos.textContent = money(json.finanzas?.egresos_mensuales);
 
-      const cap = (+json.finanzas?.ingresos_mensuales || 0) - (+json.finanzas?.egresos_mensuales || 0);
+      const cap = Number.isFinite(Number(json.capacidad_pago))
+        ? Number(json.capacidad_pago)
+        : ((+json.finanzas?.ingresos_mensuales || 0) - (+json.finanzas?.egresos_mensuales || 0));
       $evCapacidad.textContent = money(cap);
       $evRiesgo.innerHTML = (json.riesgos || []).map(r => `<option value=\"${r.id}\">${r.nivel}</option>`).join('');
       if (json.documentos) {
@@ -388,16 +469,27 @@
         html += '<div><strong>Riesgo:</strong> <span ">' + (data.score?.riesgo ?? '—') + '</span></div>';
         html += '</div>';
         // Resumen crediticio
-        if (data.resumen_crediticio) {
-          const resumen = data.resumen_crediticio;
+        if (data.resumen_crediticio || data.detalle_cuentas || data.historial_24_meses) {
+          const resumen = data.resumen_crediticio || {};
+          const prestamosActivos = Number(resumen.prestamos_activos ?? data.detalle_cuentas?.prestamos?.length ?? 0);
+          const tarjetasCredito = Number(resumen.tarjetas_credito ?? data.detalle_cuentas?.tarjetas?.length ?? 0);
+          const lineasCredito = Number(resumen.lineas_credito ?? resumen.cantidad_productos ?? (prestamosActivos + tarjetasCredito));
+          const consultasRecientes = Number(resumen.consultas_recientes ?? resumen.consultas_ultimo_mes ?? 0);
+          let atrasoMaximo = Number(resumen.atraso_maximo ?? 0);
+          if (!atrasoMaximo && Array.isArray(data.historial_24_meses)) {
+            atrasoMaximo = data.historial_24_meses.reduce((maximo, item) => {
+              const dias = Number(item?.dias_mora ?? 0);
+              return dias > maximo ? dias : maximo;
+            }, 0);
+          }
           html += '<h3 style="margin-top: 15px; margin-bottom: 5px;"> Resumen crediticio</h3>';
           html += '<ul>';
-          html += '<li>Prestamos activos: <strong>' + resumen.prestamos_activos + '</strong></li>';
-          html += '<li>Tarjetas de credito: <strong>' + resumen.tarjetas_credito + '</strong></li>';
-          html += '<li>Lineas de credito: <strong>' + resumen.lineas_credito + '</strong></li>';
-          html += '<li>Consultas recientes: <strong>' + resumen.consultas_recientes + '</strong></li>';
-          html += '<li>Atraso maximo reportado: <strong style="color:' + (resumen.atraso_maximo > 30 ? '#c53030' : '#38a169') + ';">' + resumen.atraso_maximo + ' dias</strong></li>';
-          html += '<li>Recomendación:  <strong style = font-size: 14px>' + (resumen.recomendacion || '-') + '</strong></li>';
+          html += '<li>Prestamos activos: <strong>' + prestamosActivos + '</strong></li>';
+          html += '<li>Tarjetas de credito: <strong>' + tarjetasCredito + '</strong></li>';
+          html += '<li>Lineas de credito: <strong>' + lineasCredito + '</strong></li>';
+          html += '<li>Consultas recientes: <strong>' + consultasRecientes + '</strong></li>';
+          html += '<li>Atraso maximo reportado: <strong style="color:' + (atrasoMaximo > 30 ? '#c53030' : '#38a169') + ';">' + atrasoMaximo + ' dias</strong></li>';
+          html += '<li>Recomendación: <strong style="font-size: 14px;">' + (resumen.recomendacion || '-') + '</strong></li>';
           html += '</ul>';
         }
         // Alertas

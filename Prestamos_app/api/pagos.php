@@ -344,9 +344,9 @@ if ($action === 'pay'){
       $cambio_estado = ($nuevo_saldo_cuota <= 0.01) ? 'Pagada' : 'Pendiente';
 
       $st_upd = $conn->prepare("UPDATE cronograma_cuota
-                              SET total_monto = ?, estado_cuota = ?
+                              SET total_monto = ?, saldo_cuota = ?, estado_cuota = ?
                               WHERE id_cronograma_cuota = ?");
-      $st_upd->bind_param('dsi', $nuevo_saldo_cuota, $cambio_estado, $id_cuota);
+      $st_upd->bind_param('ddsi', $nuevo_saldo_cuota, $nuevo_saldo_cuota, $cambio_estado, $id_cuota);
       $st_upd->execute();
       $st_upd->close();
 
@@ -493,9 +493,9 @@ if ($action === 'close') {
 
   require_user_id();
 
-  $sql = "SELECT COALESCE(SUM(saldo_cuota),0) saldo 
-  FROM cronograma_cuota 
-  WHERE id_prestamo=?";
+  $sql = "SELECT COALESCE(SUM(total_monto),0) saldo
+  FROM cronograma_cuota
+  WHERE id_prestamo=? AND estado_cuota <> 'Pagada'";
   $st = $conn->prepare($sql);
   $st->bind_param('i', $id);
   $st->execute();

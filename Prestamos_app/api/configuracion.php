@@ -90,6 +90,16 @@ try {
     case 'politica_cancelacion':
       handlePoliticaCancelacion($conn, $action);
       break;
+    case 'regla_puntaje':
+    case 'regla_puntaje_interno':
+      handleReglaPuntajeInterno($conn, $action);
+      break;
+    case 'intervalo_riesgo':
+      handleIntervaloRiesgo($conn, $action);
+      break;
+    case 'intervalo_decision':
+      handleIntervaloDecision($conn, $action);
+      break;
     default:
       bad('Módulo no válido');
   }
@@ -988,6 +998,164 @@ function handleCaja($conn, $action) {
       bad('Acción no válida');
   }
 }
+
+function handleIntervaloRiesgo($conn, $action){
+      switch ($action) {
+        case 'list':
+          $sql = "
+            SELECT cir.id_intervalo_riesgo, cir.puntaje_minimo, cir.puntaje_maximo,
+            cir.id_nivel_riesgo, nr.nivel AS nivel_riesgo, cir.prioridad, cir.estado,
+            cir.vigente_desde, cir.vigente_hasta
+            FROM configuracion_intervalo_riesgo cir 
+            INNER JOIN cat_nivel_riesgo nr ON nr.id_nivel_riesgo = cir.id_nivel_riesgo
+            ORDER BY cir.prioridad ASC, cir.puntaje_minimo ASC 
+          ";
+          $st = $conn->prepare($sql);
+          $st->execute();
+          $res = $st->get_result();
+          $data= [];
+          while ($row = $res->fetch_assoc()) $data[] = $row;
+          ok(['data'=> $data]);
+          break;
+        case 'save':
+          $id = i('id');
+          $puntaje_minimo = i('puntaje_minimo');
+          $puntaje_maximo = i('puntaje_maximo');
+          $id_nivel_riesgo = i('id_nivel_riesgo');
+          $prioridad = i('prioridad', 100);
+          $estado = s('estado', 'Activo');
+          $vigente_desde = s('vigente_desde');
+          $vigente_hasta = s('vigente_hasta');
+
+          if ($puntaje_minimo > $puntaje_maximo) bad('Rango invvalido: puntaje_minimo no puede ser mayor a puntaje_maximo', 400);
+
+          $sqlOverlap = "
+            SELECT COUNT(*) AS total 
+            FROM configuracion_intervalo_riesgo
+            WHERE estado = 'Activo'
+              AND id_intervalo_riesgo <> ?
+              AND NOT (puntaje_maximo < ? OR puntaje_minimo > ?)
+
+          ";
+          $ov = $conn->prepare($sqlOverlap);
+          $ov->bind_param('iii', $id, $puntaje_minimo, $puntaje_maximo);
+          $ov->execute();
+          $ovRow = $ov->get_result()->fetch_assoc();
+          if ((int)($ovRow['total'] ?? 0) > 0 && $estado === 'Activo') {
+            bad('Existe choque con otro intervalo', 400);
+          }
+
+          if ($id > 0){
+            $sqlU = "
+              UPDATE configuracion_intervalo_riesgo
+              SET puntaje_minimo = ?, puntaje_maximo = ?, id_nivel_riesgo = ?, prioridad = ?,estado = ?, vigente_desde = ?, vigente_hasta = ? 
+              WHERE id_intervalo_riesgo = ? 
+            ";
+            $st = $conn->prepare($sqlU);
+            $st->bind_param('iiiisssi', $puntaje_minimo, $puntaje_maximo, $id_nivel_riesgo, $prioridad, $estado, $vigente_desde, $vigente_hasta, $id);
+            $st->execute();            
+          } else {
+            $sqlI = "
+              INSERT INTO configuracion_intervalo_riesgo (puntaje_minimo, puntaje_maximo, id_nivel_riesgo, prioridad, estado, vigente_desde, vigente_hasta)
+              VALUES (?,?,?,?,?,?,?)";
+            $st = $conn->prepare($sqlI);
+            $st->bind_param('iiiisss', $puntaje_minimo, $puntaje_maximo, $id_nivel_riesgo, $prioridad, $estado, $vigente_desde, $vigente_hasta);
+            $st->execute();
+          }
+          ok(['message' => 'Intervalo de riesgo guardado']);
+          break;
+
+          case 'delete':
+            $id = i('id');
+            if ($id <= 0) bad('ID invalido', 400);
+            $st = $conn->prepare('DELETE FROM configuracion_intervalo_riesgo WHERE id_intervalo_riesgo = ?');
+            $st->bind_param('i', $id);
+            $st->execute();
+            ok(['message' => 'Intervalo de riesgo eliminado']);
+            break;
+
+            default:
+              bad('Acción no válida');
+      }
+}
+
+function handleIntervaloDecision($conn, $action){
+  switch ($action) {
+    case 'list':
+      $sql = "
+        SELECT cid.id_intervalo_decision, cid.puntaje_minimo, cid.puntaje_maximo, cid.id_decision_evaluacion,
+        cde.codigo_decision, cde.nombre_decision, cid.prioridad, cid.estado, cid.vigente_desde, cid.vigente_hasta
+        FROM configuracion_intervalo_decision cid
+        INNER JOIN cat_decision_evaluacion cde ON cde.id_decision_evaluacion = cid.id_decision_evaluacion
+        ORDER BY cid.prioridad ASC, cid.puntaje_minimo ASC";
+      $st = $conn->prepare($sql);
+      $st->execute();
+      $res = $st->get_result();
+      $data= [];
+      while ($row = $res-> fetch_assoc()) $data[] = $row;
+      ok(['data'=> $data]);
+      break;
+
+      case 'save':
+        $id = i('id');
+        $puntaje_minimo = i('puntaje_minimo');
+        $puntaje_maximo = i('puntaje_maximo');
+        $id_decision_evaluacion = i('id_decision_evaluacion');
+        $prioridad = i('prioridad', 100);
+        $estado = s('estado', 'Activo');
+        $vigente_desde = s('vigente_desde');
+        $vigente_hasta = s('vigente_hasta');
+
+        if ($puntaje_minimo > $puntaje_maximo) bad ('Rango invalido: puntaje_minimo no puede ser mayor a puntaje_maximo', 400);
+        $sqlOverlap = "
+          SELECT COUNT(*) AS total
+          FROM configuracion_intervalo_decision
+          WHERE estado = 'Activo'
+            AND id_intervalo_decision <> ?
+            AND NOT (puntaje_maximo < ? OR puntaje_minimo > ?)";
+          $ov = $conn -> prepare($sqlOverlap);
+          $ov->bind_param('iii', $id, $puntaje_minimo, $puntaje_maximo);
+          $ov->execute();
+          $ovRow = $ov->get_result()->fetch_assoc();
+          if ((int)($ovRow['total'] ?? 0) > 0 && $estado === 'Activo') {
+            bad('Ya existe un intervalo con este nombre', 400);
+          }
+
+          if ($id > 0){
+            $sqlU = "
+              UPDATE configuracion_intervalo_decision
+              SET puntaje_minimo = ?, puntaje_maximo = ?, id_decision_evaluacion =?, prioridad = ?, estado = ?, vigente_desde = ?, vigente_hasta = ?
+              WHERE id_intervalo_decision = ?
+              ";
+              $st = $conn->prepare($sqlU);
+              $st->bind_param('iiiisssi', $puntaje_minimo, $puntaje_maximo,
+              $id_decision_evaluacion, $prioridad, $estado, $vigente_desde, $vigente_hasta, $id);
+              $st->execute();
+          } else {
+            $sqlI = "
+              INSERT INTO configuracion_intervalo_decision (puntaje_minimo, puntaje_maximo, id_decision_evaluacion, prioridad, estado, vigente_desde, vigente_hasta)
+              VALUES (?,?,?,?,?,?,?)
+            ";
+            $st = $conn->prepare($sqlI);
+            $st->bind_param('iiiisss', $puntaje_minimo, $puntaje_maximo, $id_decision_evaluacion, $prioridad, $estado, $vigente_desde, $vigente_hasta);
+            $st->execute();
+          }
+          ok(['message' => 'Intervalo de decision guardado']);
+          break;
+
+          case 'delete':
+            $id = i('id');
+            if ($id <= 0) bad('ID invalido', 400);
+            $st = $conn->prepare('DELETE FROM configuracion_intervalo_decision WHERE id_intervalo_decision = ?');
+            $st->bind_param('i', $id);
+            $st->execute();
+            ok(['message' => 'Intervalo de decision eliminado']);
+            break;
+            default:
+              bad('Acción no válida');
+  }
+}
+
 function handlePlantillaNotificacion($conn, $action) {
     switch ($action) {
         case 'list':
@@ -1131,4 +1299,88 @@ function handlePoliticaCancelacion($conn, $action){
         bad('Acción no válida');
   }
 } 
+
+function handleReglaPuntajeInterno($conn, $action) {
+  switch ($action) {
+    case 'list':
+        $stmt = $conn->prepare("\n        SELECT\n          r.id_regla_puntaje AS id_regla,
+          r.nombre_regla,
+          r.clave_regla,
+          r.puntos,
+          r.id_categoria_regla,
+          c.nombre_categoria AS categoria,
+          r.estado
+        FROM reglas_puntaje_interno r
+        INNER JOIN cat_categoria_regla_evaluacion c ON c.id_categoria_regla = r.id_categoria_regla
+        ORDER BY c.nombre_categoria, r.nombre_regla\n      ");
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $data = [];
+      while ($row = $result->fetch_assoc()) {
+        $data[] = $row;
+      }
+      ok(['data' => $data]);
+      break;
+
+    case 'save':
+      $id = i('id');
+      $puntos = i('puntos');
+      $estado = s('estado', 'Activo');
+      $idCategoria = i('id_categoria_regla');
+      $categoriaNombre = s('categoria');
+
+      if ($id <= 0) {
+        bad('ID de regla inválido', 400);
+      }
+      if ($estado !== 'Activo' && $estado !== 'Inactivo') {
+        bad('Estado inválido', 400);
+      }
+
+      if ($idCategoria <= 0 && !empty($categoriaNombre)) {
+        $catByName = $conn->prepare("SELECT id_categoria_regla FROM cat_categoria_regla_evaluacion WHERE nombre_categoria = ? LIMIT 1");
+        $catByName->bind_param('s', $categoriaNombre);
+        $catByName->execute();
+        $catByName->bind_result($catIdResolved);
+        if ($catByName->fetch()) {
+          $idCategoria = (int)$catIdResolved;
+        } else {
+          bad('Categoría inválida', 400);
+        }
+      }
+
+      if ($idCategoria > 0) {
+        $catCheck = $conn->prepare("SELECT id_categoria_regla FROM cat_categoria_regla_evaluacion WHERE id_categoria_regla = ? LIMIT 1");
+        $catCheck->bind_param('i', $idCategoria);
+        $catCheck->execute();
+        if ($catCheck->get_result()->num_rows === 0) {
+          bad('Categoría inválida', 400);
+        }
+      }
+
+      if ($idCategoria > 0) {
+        $stmt = $conn->prepare("UPDATE reglas_puntaje_interno SET puntos = ?, estado = ?, id_categoria_regla = ? WHERE id_regla_puntaje = ?");
+        $stmt->bind_param('isii', $puntos, $estado, $idCategoria, $id);
+      } else {
+        $stmt = $conn->prepare("UPDATE reglas_puntaje_interno SET puntos = ?, estado = ? WHERE id_regla_puntaje = ?");
+        $stmt->bind_param('isi', $puntos, $estado, $id);
+      }
+      $stmt->execute();
+
+      if ($stmt->affected_rows === 0) {
+        $check = $conn->prepare("SELECT id_regla_puntaje FROM reglas_puntaje_interno WHERE id_regla_puntaje = ? LIMIT 1");
+        $check->bind_param('i', $id);
+        $check->execute();
+        if ($check->get_result()->num_rows === 0) {
+          bad('No se encontró la regla a actualizar', 404);
+        }
+      }
+
+      ok(['message' => 'Regla de puntaje actualizada']);
+      break;
+
+    default:
+      bad('Acción no válida', 400);
+  }
+}
+
 ?>

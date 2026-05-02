@@ -13,7 +13,7 @@ $APP_BASE = ($APP_BASE === '' ? '/' : $APP_BASE . '/');
 
 $BASE_URL = rtrim(str_replace('\\','/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $BASE_URL = preg_replace('#/views$#','', $BASE_URL);
-$BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
+$BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/');
 
 ?>
 <!doctype html>
@@ -122,6 +122,8 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
       <div class="tabs">
         <button class="tab-btn active" data-tab="evaluacion">Evaluación</button>
         <button class="tab-btn" data-tab="morosos">Morosos</button>
+        <button id="btnHistorial" class="btn btn-light" style="margin-left: 10px; display:flex; align-items: center; gap: 5px;">
+          Historial de evaluaciones</button>
 
         <button id="btnAutoNotify" class="btn btn-primary" style="display:none; margin-left: auto; background-color: #e53e3e; color: white; border: none;">
           Notificar clientes en Mora
@@ -319,7 +321,32 @@ $BASE_URL = ($BASE_URL === '' ? '/' : $BASE_URL . '/')
     </div>
   </div>
 </div>
-<script>window.APP_BASE = "<?= $BASE_URL ?>";</script>
+<!-- Historial de evaluaciones -->
+<div class="modal" id="modalHistorial">
+  <div class="modal__dialog modal__dialog--lg">
+    <div class="modal__header">
+      <div>Historial de evaluaciones</div>
+      <button class="modal__close" data-close>✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="table-container">
+        <table class="table-simple" id="tablaHistorial">
+          <thead>
+            <tr>
+              <th> ID prestamo</th>
+              <th>Cliente</th>
+              <th>Fecha evaluación</th>
+              <th>Resultado</th>
+              <th style="text-align:right;">Accion</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>window.APP_BASE = "<?= $APP_BASE ?>";</script>
 <script src="public/JS/seguimiento.js?v=1"></script>
 </body>
 </html>

@@ -72,6 +72,15 @@ function loadTabData(tab) {
             loadFondos();
             loadCaja();
             break;
+        case 'evaluacion':
+            loadReglaPuntaje();
+            loadIntervaloRiesgo();
+            loadIntervaloDecision();
+            break;
+        case 'intervalos_evaluacion':
+            loadIntervaloRiesgo();
+            loadIntervaloDecision();
+            break;
     }
 }
 
@@ -100,6 +109,150 @@ async function apiRequest(module, action, data = {}) {
         console.error('Error en API request:', error);
         throw error;
     }
+}
+
+// Funcion para intervalos de riesgo
+async function loadIntervaloRiesgo(){
+    try {
+        const response = await apiRequest('intervalo_riesgo', 'list');
+        const tbody = document.querySelector('#tableIntervaloRiesgo tbody');
+        if (!tbody) return;
+        tbody.innerHTML = response.data.map(item => `
+            <tr>
+                <td>${item.puntaje_minimo}</td>
+                <td>${item.puntaje_maximo}</td>
+                <td>${item.nivel_riesgo}</td>
+                <td>${item.prioridad}</td>
+                <td>${item.estado}</td>
+                <td class="table-actions">
+                    <button class="action-btn edit" onclick="editIntervaloRiesgo(${item.id_intervalo_riesgo})">
+                        Editar
+                    </button>
+                    <button class="action-btn delete" onclick="deleteIntervaloRiesgo(${item.id_intervalo_riesgo})">Eliminar</button>
+                </td>
+            </tr>
+                `).join('');
+    } catch (error) {
+        console.error('Error cargando intervalos de riesgo:', error);
+    }
+}
+
+async function editIntervaloRiesgo(id){
+    const response = await apiRequest('intervalo_riesgo', 'list');
+    const item = response.data.find(x => Number(x.id_intervalo_riesgo) === Number(id));
+    if (!item) return;
+
+    document.getElementById('idIntervaloRiesgo').value = item.id_intervalo_riesgo;
+    document.getElementById('riesgoMin').value = item.puntaje_minimo;
+    document.getElementById('riesgoMax').value = item.puntaje_maximo;
+    document.getElementById('idNivelRiesgo').value = item.id_nivel_riesgo;
+    document.getElementById('prioridadRiesgo').value = item.prioridad;
+    document.getElementById('estadoRiesgo').value = item.estado;
+    document.getElementById('vigenteDesdeRiesgo').value = item.vigente_desde;
+    document.getElementById('vigenteHastaRiesgo').value = item.vigente_hasta || '';
+    openModal('modalIntervaloRiesgo');
+}
+
+async function saveIntervaloRiesgo(e){
+e.preventDefault();
+const data = Object.fromEntries(new FormData(e.target));
+if (Number(data.puntaje_minimo) > Number(data.puntaje_maximo)){
+    alert ('Rango invalido: el puntaje minimo no puede ser mayor al maximo');
+    return;
+}
+    try {
+        await apiRequest('intervalo_riesgo', 'save', data);
+        closeModal('modalIntervaloRiesgo');
+        e.target.reset();
+        loadIntervaloRiesgo();
+    } catch (error) {
+        alert(error.message || 'Error guardando intervalo de riesgo');
+        console.error(error);
+    }
+}
+
+async function deleteIntervaloRiesgo(id){
+    if(!confirm('Desea eliminar este intervalo de riesgo?')) return;
+    try {
+        await apiRequest('intervalo_riesgo', 'delete', { id });
+        loadIntervaloRiesgo();
+    } catch (error) {
+        alert (error.message || 'Error eliminando el intervalo de riesgo');
+        console.error(error);
+    }
+}
+
+// Funciones para intervalos de decision
+async function loadIntervaloDecision(){
+    try {
+        const response = await apiRequest('intervalo_decision', 'list');
+        const tbody = document.querySelector('#tableIntervaloDecision tbody');
+        if (!tbody) return;
+        tbody.innerHTML = response.data.map(item => `
+            <tr>
+                <td>${item.puntaje_minimo}</td>
+                <td>${item.puntaje_maximo}</td>
+                <td>${item.nombre_decision}</td>
+                <td>${item.prioridad}</td>
+                <td>${item.estado}</td>
+                <td class="table-actions">
+                   <button class="action-btn edit" onclick="editIntervaloDecision(${item.id_intervalo_decision})">
+                     Editar
+                    </button>
+                    <button class="action-btn delete" onclick="deleteIntervaloDecision(${item.id_intervalo_decision})">Eliminar</button>
+                </td>
+            </tr>
+                `).join('');
+    } catch (error) {
+        console.error('Error cargando intervalos de decisión:', error);
+    }
+}
+
+async function editIntervaloDecision(id){
+    const response = await apiRequest('intervalo_decision', 'list');
+    const item = response.data.find(x => Number(x.id_intervalo_decision) === Number(id));
+    if (!item) return;
+
+    document.getElementById('idIntervaloDecision').value = item.id_intervalo_decision;
+    document.getElementById('decisionMin').value = item.puntaje_minimo;
+    document.getElementById('decisionMax').value = item.puntaje_maximo;
+    document.getElementById('idDecisionEvaluacion').value = item.id_decision_evaluacion;
+    document.getElementById('prioridadDecision').value = item.prioridad;
+    document.getElementById('estadoDecision').value = item.estado;
+    document.getElementById('vigenteDesdeDecision').value = item.vigente_desde;
+    document.getElementById('vigenteHastaDecision').value = item.vigente_hasta || '';
+    openModal('modalIntervaloDecision');
+}
+
+async function saveIntervaloDecision(e){
+    e.preventDefault();
+    const data = Object.fromEntries (new FormData(e.target));
+    if (Number(data.puntaje_minimo) > Number(data.puntaje_maximo)){
+        alert('Rango invalido: El puntaje minimo no puede ser mayor al maximo');
+        return;
+    }
+
+        try {
+            await apiRequest('intervalo_decision', 'save', data);
+            closeModal('modalIntervaloDecision');
+            e.target.reset();
+            loadIntervaloDecision();
+        }catch (error) {
+            alert (error.message || 'Error guardando intervalo de decision');
+            console.error(error);
+    }
+}
+
+async function deleteIntervaloDecision(id){
+    if (!confirm('Desea eliminar este intervalo de decision?')) return;
+    try {
+        await apiRequest('intervalo_decision', 'delete', { id });
+        loadIntervaloDecision();
+    } catch (error) {
+        alert (error.message || 'Error eliminando el intervalo de decision');
+        console.error(error);
+    }
+
 }
 
 async function aplicarMoraAhora() {
@@ -1232,5 +1385,156 @@ async function deletePoliticaCancelacion(id) {
         loadPoliticaCancelacion();
     } catch (error) {
         console.error('Error eliminando política:', error);
+    }
+}
+
+function getEstadoCategoriaReglas(reglas) {
+    const estados = Array.from(new Set((reglas || []).map(item => (item.estado || '').trim()).filter(Boolean)));
+    if (estados.length === 0) return 'Sin estado';
+    if (estados.length === 1) return estados[0];
+    return 'Mixto';
+}
+
+function toggleCategoriaReglas(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    const abierto = panel.style.display !== 'none';
+    panel.style.display = abierto ? 'none' : 'table-row';
+
+    document.querySelectorAll(`[data-target-panel="${panelId}"]`).forEach(control => {
+        control.setAttribute('aria-expanded', String(!abierto));
+        if (control.dataset.openText && control.dataset.closeText) {
+            control.textContent = abierto ? control.dataset.openText : control.dataset.closeText;
+        }
+    });
+}
+
+async function loadReglaPuntaje(){
+    try{
+        const response = await apiRequest('regla_puntaje_interno', 'list');
+        const tbody = document.querySelector('#tableReglaPuntaje tbody');
+        if (!tbody) return;
+        const reglas = Array.isArray(response.data) ? response.data : [];
+
+        if (reglas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay reglas de puntaje registradas</td></tr>';
+            return;
+        }
+
+        const categorias = new Map();
+        reglas.forEach(item => {
+            const idCategoria = Number(item.id_categoria_regla || 0);
+            const nombreCategoria = item.categoria || 'Sin categoría';
+            const key = idCategoria > 0 ? `id-${idCategoria}` : `cat-${nombreCategoria.toLowerCase()}`;
+
+            if (!categorias.has(key)) {
+                categorias.set(key, {
+                    id: idCategoria,
+                    nombre: nombreCategoria,
+                    reglas: []
+                });
+            }
+
+            categorias.get(key).reglas.push(item);
+        });
+
+        tbody.innerHTML = Array.from(categorias.values()).map((categoria, index) => {
+            const panelId = `reglasCategoriaPanel_${categoria.id > 0 ? categoria.id : index + 1}`;
+            const cantidad = categoria.reglas.length;
+            const totalPuntos = categoria.reglas.reduce((sum, regla) => sum + Number(regla.puntos || 0), 0);
+            const estadoCategoria = getEstadoCategoriaReglas(categoria.reglas);
+
+            const filasReglas = categoria.reglas.map(item => `
+                <tr>
+                    <td>${item.nombre_regla}</td>
+                    <td><strong style="color:${Number(item.puntos) >= 0 ? 'green' : 'red'}">${item.puntos}</strong></td>
+                    <td>${item.estado}</td>
+                    <td class="table-actions">
+                        <button class="action-btn edit" onclick="editReglaPuntaje(${item.id_regla})">Editar</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            return `
+                <tr class="categoria-summary-row">
+                    <td>
+                        <button type="button" class="categoria-chip" data-target-panel="${panelId}" aria-expanded="false" onclick="toggleCategoriaReglas('${panelId}')">${categoria.nombre}</button>
+                    </td>
+                    <td>${cantidad} ${cantidad === 1 ? 'regla' : 'reglas'}</td>
+                    <td><strong style="color:${totalPuntos >= 0 ? 'green' : 'red'}">${totalPuntos}</strong></td>
+                    <td>${estadoCategoria}</td>
+                    <td class="table-actions">
+                        <button type="button" class="action-btn view" data-target-panel="${panelId}" data-open-text="Ver reglas" data-close-text="Ocultar" aria-expanded="false" onclick="toggleCategoriaReglas('${panelId}')">Ver reglas</button>
+                    </td>
+                </tr>
+                <tr id="${panelId}" class="categoria-rules-row" style="display:none;">
+                    <td colspan="5">
+                        <div class="categoria-rules-box">
+                            <table class="config-table reglas-detalle-table">
+                                <thead>
+                                    <tr>
+                                        <th>Regla</th>
+                                        <th>Puntos</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${filasReglas}</tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {console.error('Error:', error);}
+}
+
+function renderCategoriaReglaOptions(reglas, selectedId) {
+    const select = document.getElementById('categoriaRegla');
+    if (!select) return;
+
+    const categoriasMap = new Map();
+    (reglas || []).forEach(item => {
+        const id = Number(item.id_categoria_regla || 0);
+        if (id > 0 && !categoriasMap.has(id)) {
+            categoriasMap.set(id, item.categoria || `Categoria ${id}`);
+        }
+    });
+
+    const categorias = Array.from(categoriasMap.entries()).map(([id, nombre]) => ({ id, nombre }));
+    select.innerHTML = categorias.map(cat => `<option value="${cat.id}">${cat.nombre}</option>`).join('');
+
+    const selected = Number(selectedId || 0);
+    if (selected > 0 && categoriasMap.has(selected)) {
+        select.value = String(selected);
+    }
+}
+
+function editReglaPuntaje(id){
+    apiRequest('regla_puntaje_interno', 'list').then(res=>{
+        renderCategoriaReglaOptions(res.data, null);
+        const item = res.data.find(r => r.id_regla == id);
+        if (item){
+            document.getElementById('idRegla').value = item.id_regla;
+            document.getElementById('nombreRegla').value = item.nombre_regla;
+            document.getElementById('categoriaRegla').value = item.id_categoria_regla;
+            document.getElementById('puntosRegla').value = item.puntos;
+            document.getElementById('estadoRegla').value = item.estado;
+            openModal('modalReglaPuntaje');
+        }
+    });
+}
+
+async function saveReglaPuntaje(e) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    try {
+        await apiRequest('regla_puntaje_interno', 'save', data);
+        closeModal('modalReglaPuntaje');
+        loadReglaPuntaje();
+    } catch (error) {
+        alert('Error al guardar');
+        console.error('Error al guardar regla de puntaje:', error);
     }
 }

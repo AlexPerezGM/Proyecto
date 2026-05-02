@@ -35,6 +35,127 @@ function table_has_column(mysqli $conn, string $table, string $column): bool {
     return $cache[$key];
 }
 
+function table_exists(mysqli $conn, string $table): bool {
+    static $cache = [];
+    if (isset($cache[$table])) return $cache[$table];
+    $safe = $conn->real_escape_string($table);
+    $rs = $conn->query("SHOW TABLES LIKE '$safe'");
+    $cache[$table] = (bool)($rs && $rs->num_rows > 0);
+    return $cache[$table];
+}
+
+function perfil_cliente_pk_column(mysqli $conn): string {
+    if (!table_exists($conn, 'cliente_perfil_socioeconomico')) return '';
+    if (table_has_column($conn, 'cliente_perfil_socioeconomico', 'id_cliente')) return 'id_cliente';
+    if (table_has_column($conn, 'cliente_perfil_socioeconomico', 'id_perfil_cliente')) return 'id_perfil_cliente';
+    return '';
+}
+
+function resolver_fuente_ingreso(mysqli $conn, int $idFuente, string $fallback = ''): string {
+    if ($idFuente > 0 && table_exists($conn, 'cat_fuente_ingreso')) {
+        $st = $conn->prepare("SELECT fuente_ingreso FROM cat_fuente_ingreso WHERE id_fuente_ingreso = ? LIMIT 1");
+        bind_params_safe($st, "i", [$idFuente]);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+        $txt = trim((string)($row['fuente_ingreso'] ?? ''));
+        if ($txt !== '') return $txt;
+    }
+    return trim($fallback);
+}
+
+function upsert_perfil_socioeconomico_cliente(
+    mysqli $conn,
+    int $idCliente,
+    int $idTipoVivienda,
+    int $dependientes,
+    int $antiguedadLaboral,
+    int $idSectorEconomico,
+    int $idFuenteIngreso,
+    string $fuenteTexto
+): void {
+    $perfilPk = perfil_cliente_pk_column($conn);
+    if ($perfilPk === '') return;
+
+    $idTipoVivienda = $idTipoVivienda > 0 ? $idTipoVivienda : null;
+    $idSectorEconomico = $idSectorEconomico > 0 ? $idSectorEconomico : null;
+    $idFuenteIngreso = $idFuenteIngreso > 0 ? $idFuenteIngreso : null;
+
+    $sql = "
+        INSERT INTO cliente_perfil_socioeconomico
+        ($perfilPk, id_tipo_vivienda, cantidad_dependientes, antiguedad_laboral_meses, id_sector_economico, id_fuente_ingreso, fuente_ingresos)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            id_tipo_vivienda = VALUES(id_tipo_vivienda),
+            cantidad_dependientes = VALUES(cantidad_dependientes),
+            antiguedad_laboral_meses = VALUES(antiguedad_laboral_meses),
+            id_sector_economico = VALUES(id_sector_economico),
+            id_fuente_ingreso = VALUES(id_fuente_ingreso),
+            fuente_ingresos = VALUES(fuente_ingresos)
+    ";
+    $st = $conn->prepare($sql);
+    bind_params_safe(
+        $st,
+        "iiiiiis",
+        [$idCliente, $idTipoVivienda, $dependientes, $antiguedadLaboral, $idSectorEconomico, $idFuenteIngreso, $fuenteTexto]
+    );
+    $st->execute();
+    $st->close();
+}
+
+function ensure_cliente_socio_schema(mysqli $conn): void {
+    try {
+        $conn->query("CREATE TABLE IF NOT EXISTS cat_fuente_ingreso (
+            id_fuente_ingreso INT AUTO_INCREMENT PRIMARY KEY,
+            fuente_ingreso VARCHAR(100) NOT NULL UNIQUE
+        ) ENGINE=INNODB");
+
+        if (table_exists($conn, 'cat_tipo_vivienda')) {
+            $rowTv = $conn->query("SELECT COUNT(*) AS c FROM cat_tipo_vivienda")->fetch_assoc();
+            if ((int)($rowTv['c'] ?? 0) === 0) {
+                $conn->query("INSERT INTO cat_tipo_vivienda (tipo_vivienda) VALUES ('Propia'), ('Alquilada'), ('Familiar'), ('Otra')");
+            }
+        }
+
+        if (table_exists($conn, 'cat_sector_economico')) {
+            $rowSe = $conn->query("SELECT COUNT(*) AS c FROM cat_sector_economico")->fetch_assoc();
+            if ((int)($rowSe['c'] ?? 0) === 0) {
+                $conn->query("INSERT INTO cat_sector_economico (sector, nivel_riesgo) VALUES
+                    ('Publico', 'Bajo'),
+                    ('Privado', 'Medio'),
+                    ('Independiente', 'Alto'),
+                    ('Otro', 'Medio')");
+            }
+        }
+
+        $conn->query("INSERT IGNORE INTO cat_fuente_ingreso (fuente_ingreso) VALUES
+            ('Sueldo fijo'),
+            ('Variable'),
+            ('Inversiones'),
+            ('Remesas'),
+            ('Negocio propio'),
+            ('Otro')");
+
+        $conn->query("CREATE TABLE IF NOT EXISTS cliente_perfil_socioeconomico (
+            id_cliente INT PRIMARY KEY,
+            id_tipo_vivienda INT NULL,
+            cantidad_dependientes INT NOT NULL DEFAULT 0,
+            antiguedad_laboral_meses INT NOT NULL DEFAULT 0,
+            id_sector_economico INT NULL,
+            id_fuente_ingreso INT NULL,
+            fuente_ingresos VARCHAR(100) NULL,
+            actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_cps_cliente FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente)
+                ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT fk_cps_vivienda FOREIGN KEY (id_tipo_vivienda) REFERENCES cat_tipo_vivienda(id_tipo_vivienda),
+            CONSTRAINT fk_cps_sector FOREIGN KEY (id_sector_economico) REFERENCES cat_sector_economico(id_sector_economico),
+            CONSTRAINT fk_cps_fuente FOREIGN KEY (id_fuente_ingreso) REFERENCES cat_fuente_ingreso(id_fuente_ingreso)
+        ) ENGINE=INNODB");
+    } catch (Throwable $__) {
+        // Si el usuario de BD no tiene permisos DDL, se continua con el flujo normal.
+    }
+}
+
 if (!function_exists('fnum')) {
     function fnum($v,$d=2){ return number_format((float)$v,$d,'.',','); }
 }
@@ -270,14 +391,39 @@ function resolve_id_documentacion_cliente(mysqli $conn, string $tipoCodigo): int
     return $id;
 }
 try {
+    ensure_cliente_socio_schema($conn);
+
     $action = s('action','list');
     if ($action === 'catalogos') {
-        $out = ['generos'=>[], 'tipos_documento'=>[]];
+        $out = ['generos'=>[], 'tipos_documento'=>[], 'tipos_vivienda'=>[], 'sectores_economicos'=>[], 'fuentes_ingreso'=>[]];
         $res = $conn->query("SELECT id_genero, genero FROM cat_genero ORDER BY id_genero");
         while ($r = $res->fetch_assoc()) $out['generos'][] = $r;
 
         $res = $conn->query("SELECT id_tipo_documento, tipo_documento FROM cat_tipo_documento ORDER BY id_tipo_documento");
         while ($r = $res->fetch_assoc()) $out['tipos_documento'][] = $r;
+
+        if (table_exists($conn, 'cat_tipo_vivienda')) {
+            $res = $conn->query("SELECT id_tipo_vivienda, tipo_vivienda FROM cat_tipo_vivienda ORDER BY tipo_vivienda");
+            while ($r = $res->fetch_assoc()) $out['tipos_vivienda'][] = $r;
+        }
+
+        if (table_exists($conn, 'cat_sector_economico')) {
+            $res = $conn->query("SELECT id_sector_economico, sector FROM cat_sector_economico ORDER BY sector");
+            while ($r = $res->fetch_assoc()) $out['sectores_economicos'][] = $r;
+        }
+
+        if (table_exists($conn, 'cat_fuente_ingreso')) {
+            $res = $conn->query("SELECT id_fuente_ingreso, fuente_ingreso FROM cat_fuente_ingreso ORDER BY fuente_ingreso");
+            while ($r = $res->fetch_assoc()) $out['fuentes_ingreso'][] = $r;
+        } else {
+            $res = $conn->query("SELECT DISTINCT fuente FROM fuente_ingreso WHERE fuente IS NOT NULL AND TRIM(fuente) <> '' ORDER BY fuente");
+            while ($r = $res->fetch_assoc()) {
+                $out['fuentes_ingreso'][] = [
+                    'id_fuente_ingreso' => 0,
+                    'fuente_ingreso' => (string)($r['fuente'] ?? '')
+                ];
+            }
+        }
 
         ok($out);
     }
@@ -390,6 +536,34 @@ try {
         if ($id <= 0) 
             bad('id_cliente requerido', 400);
 
+        $perfilPk = perfil_cliente_pk_column($conn);
+        $tienePerfil = ($perfilPk !== '');
+        $selectPerfil = $tienePerfil
+            ? "
+                COALESCE(cps.id_tipo_vivienda, 0) AS id_tipo_vivienda,
+                COALESCE(ctv.tipo_vivienda, '') AS tipo_vivienda,
+                COALESCE(cps.cantidad_dependientes, 0) AS dependientes,
+                COALESCE(cps.antiguedad_laboral_meses, 0) AS antiguedad_laboral,
+                COALESCE(cps.id_sector_economico, 0) AS id_sector_economico,
+                COALESCE(cse.sector, '') AS sector_laboral,
+                COALESCE(cps.id_fuente_ingreso, 0) AS id_fuente_ingreso,
+                COALESCE(cfi.fuente_ingreso, cps.fuente_ingresos, fi.fuente, '') AS fuente_ingresos,
+                COALESCE(cfi.fuente_ingreso, cps.fuente_ingresos, fi.fuente, '') AS fuente,"
+            : "
+                0 AS id_tipo_vivienda,
+                '' AS tipo_vivienda,
+                0 AS dependientes,
+                0 AS antiguedad_laboral,
+                0 AS id_sector_economico,
+                '' AS sector_laboral,
+                0 AS id_fuente_ingreso,
+                COALESCE(fi.fuente, '') AS fuente_ingresos,
+                COALESCE(fi.fuente, '') AS fuente,";
+
+        $joinPerfil = $tienePerfil
+            ? "\n            LEFT JOIN cliente_perfil_socioeconomico cps ON cps.$perfilPk = c.id_cliente\n            LEFT JOIN cat_tipo_vivienda ctv ON ctv.id_tipo_vivienda = cps.id_tipo_vivienda\n            LEFT JOIN cat_sector_economico cse ON cse.id_sector_economico = cps.id_sector_economico\n            LEFT JOIN cat_fuente_ingreso cfi ON cfi.id_fuente_ingreso = cps.id_fuente_ingreso"
+            : "";
+
         $sql = "
             SELECT
                 c.id_cliente,
@@ -398,7 +572,8 @@ try {
                 di.numero_documento, td.tipo_documento, di.fecha_emision,
                 em.email, t.telefono,
                 d.ciudad, d.sector, d.calle, d.numero_casa,
-                ie.ingresos_mensuales, ie.egresos_mensuales, fi.fuente,
+                ie.ingresos_mensuales, ie.egresos_mensuales,
+                $selectPerfil
                 oc.ocupacion, oc.empresa,
                 COALESCE((
                     SELECT ce.estado
@@ -416,9 +591,18 @@ try {
             LEFT JOIN email em ON em.id_datos_persona = dp.id_datos_persona AND em.es_principal=1
             LEFT JOIN telefono t ON t.id_datos_persona = dp.id_datos_persona AND t.es_principal=1
             LEFT JOIN direccion d ON d.id_datos_persona = dp.id_datos_persona
-            LEFT JOIN ingresos_egresos ie ON ie.id_cliente = c.id_cliente
+            LEFT JOIN (
+                SELECT ie1.*
+                FROM ingresos_egresos ie1
+                INNER JOIN (
+                    SELECT id_cliente, MAX(id_ingresos_egresos) AS max_id
+                    FROM ingresos_egresos
+                    GROUP BY id_cliente
+                ) ie2 ON ie2.id_cliente = ie1.id_cliente AND ie2.max_id = ie1.id_ingresos_egresos
+            ) ie ON ie.id_cliente = c.id_cliente
             LEFT JOIN fuente_ingreso fi ON fi.id_ingresos_egresos = ie.id_ingresos_egresos
             LEFT JOIN ocupacion oc ON oc.id_datos_persona = dp.id_datos_persona
+            $joinPerfil
             WHERE c.id_cliente = ?
             LIMIT 1
         ";
@@ -487,10 +671,28 @@ try {
         $tel   = s('telefono');
         $email = s('email');
         $ciudad = s('ciudad'); $sector = s('sector'); $calle = s('calle'); $numCasa = i('numero_casa');
-        $fuente = s('fuente_ingresos');
+        $idTipoVivienda = i('tipo_vivienda', 0);
+        $dependientes = max(0, i('dependientes', 0));
+        $antiguedadLaboral = max(0, i('antiguedad_laboral', 0));
+        $idSectorEconomico = i('sector_laboral', 0);
+        $idFuenteIngreso = i('fuente_ingresos', 0);
+        $fuente = resolver_fuente_ingreso($conn, $idFuenteIngreso, s('fuente_ingresos'));
         $ocup   = s('ocupacion'); $emp = s('empresa');
 
         $id_dp_existente = i('existing_id_dp', 0);
+
+        if ($tipoDoc && $numDoc !== '') {
+            $st = $conn->prepare("SELECT id_datos_persona FROM documento_identidad WHERE id_tipo_documento = ? AND numero_documento = ? LIMIT 1");
+            bind_params_safe($st, "is", [$tipoDoc, $numDoc]);
+            $st->execute();
+            $docRow = $st->get_result()->fetch_assoc();
+            $st->close();
+
+            $docOwner = (int)($docRow['id_datos_persona'] ?? 0);
+            if ($docOwner > 0 && ($id_dp_existente <= 0 || $docOwner !== $id_dp_existente)) {
+                bad('El número de documento ya está asociado a otro cliente.', 409);
+            }
+        }
 
         $conn->begin_transaction();
 
@@ -545,11 +747,7 @@ try {
                 $id_dp = $conn->insert_id; 
                 $st->close();
 
-                $st = $conn->prepare("
-                    INSERT INTO documento_identidad(id_datos_persona,id_tipo_documento,numero_documento,fecha_emision)
-                    VALUES (?,?,?,CURDATE())
-                    ON DUPLICATE KEY UPDATE id_datos_persona=VALUES(id_datos_persona), id_tipo_documento=VALUES(id_tipo_documento)
-                ");
+                $st = $conn->prepare("INSERT INTO documento_identidad(id_datos_persona,id_tipo_documento,numero_documento,fecha_emision) VALUES (?,?,?,CURDATE())");
                 bind_params_safe($st, "iis", [$id_dp,$tipoDoc,$numDoc]);
                 $st->execute(); 
                 $st->close();
@@ -612,6 +810,17 @@ try {
                 $st->close();
             }
 
+            upsert_perfil_socioeconomico_cliente(
+                $conn,
+                $id_cliente,
+                $idTipoVivienda,
+                $dependientes,
+                $antiguedadLaboral,
+                $idSectorEconomico,
+                $idFuenteIngreso,
+                $fuente
+            );
+
             $conn->commit();
             ok(['id_cliente'=>$id_cliente]);
             
@@ -655,10 +864,28 @@ try {
         $direccion_alguno   = ($ciudad!=='' || $sector!=='' || $calle!=='' || $numCasa>0);
         $direccion_completa = ($ciudad!=='' && $sector!=='' && $calle!=='' && $numCasa>0);
 
-        $fuente = s('fuente_ingresos');
+        $idTipoVivienda = i('tipo_vivienda', 0);
+        $dependientes = max(0, i('dependientes', 0));
+        $antiguedadLaboral = max(0, i('antiguedad_laboral', 0));
+        $idSectorEconomico = i('sector_laboral', 0);
+        $idFuenteIngreso = i('fuente_ingresos', 0);
+        $fuente = resolver_fuente_ingreso($conn, $idFuenteIngreso, s('fuente_ingresos'));
         $ocup = s('ocupacion'); $emp = s('empresa');
 
         $valida_ie($ing, $egr);
+
+        if ($tipoDoc && $numDoc !== '') {
+            $st = $conn->prepare("SELECT id_datos_persona FROM documento_identidad WHERE id_tipo_documento = ? AND numero_documento = ? LIMIT 1");
+            bind_params_safe($st, "is", [$tipoDoc, $numDoc]);
+            $st->execute();
+            $docRow = $st->get_result()->fetch_assoc();
+            $st->close();
+
+            $docOwner = (int)($docRow['id_datos_persona'] ?? 0);
+            if ($docOwner > 0 && $docOwner !== $id_dp) {
+                bad('El número de documento ya está asociado a otro cliente.', 409);
+            }
+        }
 
         $conn->begin_transaction();
 
@@ -675,13 +902,21 @@ try {
         $st->close();
 
         if ($tipoDoc && $numDoc!=='') {
-            $st = $conn->prepare("
-                INSERT INTO documento_identidad(id_datos_persona,id_tipo_documento,numero_documento,fecha_emision)
-                VALUES (?,?,?,CURDATE())
-                ON DUPLICATE KEY UPDATE id_datos_persona=VALUES(id_datos_persona), id_tipo_documento=VALUES(id_tipo_documento)
-            ");
-            bind_params_safe($st,"iis",[$id_dp,$tipoDoc,$numDoc]);
-            $st->execute(); 
+            $st = $conn->prepare("SELECT id_documento_identidad FROM documento_identidad WHERE id_datos_persona = ? ORDER BY id_documento_identidad ASC LIMIT 1");
+            bind_params_safe($st, "i", [$id_dp]);
+            $st->execute();
+            $docRow = $st->get_result()->fetch_assoc();
+            $st->close();
+
+            $id_doc_identidad = (int)($docRow['id_documento_identidad'] ?? 0);
+            if ($id_doc_identidad > 0) {
+                $st = $conn->prepare("UPDATE documento_identidad SET id_tipo_documento = ?, numero_documento = ?, fecha_emision = CURDATE() WHERE id_documento_identidad = ?");
+                bind_params_safe($st, "isi", [$tipoDoc, $numDoc, $id_doc_identidad]);
+            } else {
+                $st = $conn->prepare("INSERT INTO documento_identidad(id_datos_persona,id_tipo_documento,numero_documento,fecha_emision) VALUES (?,?,?,CURDATE())");
+                bind_params_safe($st, "iis", [$id_dp, $tipoDoc, $numDoc]);
+            }
+            $st->execute();
             $st->close();
         }
 
@@ -741,6 +976,17 @@ try {
             $st->execute(); 
             $st->close();
         }
+
+        upsert_perfil_socioeconomico_cliente(
+            $conn,
+            $id,
+            $idTipoVivienda,
+            $dependientes,
+            $antiguedadLaboral,
+            $idSectorEconomico,
+            $idFuenteIngreso,
+            $fuente
+        );
 
         $conn->commit();
         ok(['id_cliente'=>$id]);

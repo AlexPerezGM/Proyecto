@@ -1,0 +1,232 @@
+:root {
+      --res-primary: #4f46e5;
+      --res-light:   #e0e7ff;
+      --res-surface: #ffffff;
+      --res-bg:      #f3f4f6;
+      --res-border:  #e5e7eb;
+      --res-badge-bg: #4f46e5;
+      --res-estado-border: #c7d2fe;
+      --res-estado-bg: #eef2ff;
+      --res-cap-fill-bg: #dc2626;
+      --res-cap-fill-width: 0%;
+    }
+ 
+    .res-page {
+      background: var(--res-bg);
+      min-height: calc(100vh - 64px);
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+ 
+    /* Encabezado */
+    .res-header {
+      background: var(--res-surface);
+      border: 1px solid var(--res-border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 2px 12px rgba(79,70,229,.08);
+    }
+    .res-header-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1e1b4b;
+    }
+ 
+    /* Badge de decisión */
+    .res-decision-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 100px;
+      font-weight: 800;
+      font-size: .9rem;
+      letter-spacing: .04em;
+      color: #fff;
+      background: var(--res-badge-bg);
+      box-shadow: 0 3px 10px rgba(0,0,0,.15);
+    }
+ 
+    /* Grid de 2 columnas */
+    .res-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 20px;
+    }
+    @media (max-width: 860px) { .res-grid { grid-template-columns: 1fr; } }
+ 
+    /* Tarjetas */
+    .res-card {
+      background: var(--res-surface);
+      border: 1px solid var(--res-border);
+      border-radius: 14px;
+      padding: 20px 22px;
+      box-shadow: 0 2px 12px rgba(79,70,229,.06);
+    }
+    .res-card-title {
+      font-weight: 700;
+      font-size: .9rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--res-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+ 
+    /* Puntaje grande */
+    .res-score-big {
+      font-size: 3.5rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .res-score-green  { color: #16a34a; }
+    .res-score-yellow { color: #d97706; }
+    .res-score-red    { color: #dc2626; }
+ 
+    .res-risk-label {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-weight: 700;
+      font-size: .82rem;
+      margin-top: 6px;
+    }
+    .risk-bajo   { background: #dcfce7; color: #166534; }
+    .risk-medio  { background: #fef3c7; color: #92400e; }
+    .risk-alto   { background: #fee2e2; color: #991b1b; }
+ 
+    /* Historial mini */
+    .res-hist-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--res-border);
+      font-size: .88rem;
+    }
+    .res-hist-row:last-child { border-bottom: none; }
+    .res-hist-row span:first-child { color: #6b7280; }
+    .res-hist-row span:last-child  { font-weight: 600; color: #111827; }
+ 
+    /* Condiciones del préstamo */
+    .res-cond-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .res-cond-item label {
+      font-size: .73rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--res-primary);
+      display: block;
+      margin-bottom: 3px;
+    }
+    .res-cond-item span {
+      font-weight: 600;
+      font-size: .95rem;
+      color: #111827;
+    }
+ 
+    /* Estado final */
+    .res-estado-banner {
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--res-estado-border);
+      background: var(--res-estado-bg);
+      font-weight: 700;
+      font-size: .95rem;
+      color: var(--res-badge-bg);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+    }
+ 
+    /* Razones de rechazo */
+    .res-rejection-list {
+      list-style: none;
+      padding: 0; margin: 0;
+    }
+    .res-rejection-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #fee2e2;
+      font-size: .88rem;
+      color: #7f1d1d;
+    }
+    .res-rejection-list li:last-child { border-bottom: none; }
+    .res-rejection-list li::before { content: '•'; color: #dc2626; font-weight: 900; flex-shrink: 0; }
+ 
+    /* Notificación */
+    .res-notification {
+      background: var(--res-light);
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: .88rem;
+      color: #3730a3;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+ 
+    /* Barra de capacidad */
+    .res-cap-bar-wrap { margin-top: 14px; }
+    .res-cap-bar-track {
+      height: 10px;
+      background: var(--res-border);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .res-cap-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: var(--res-cap-fill-bg);
+      width: var(--res-cap-fill-width);
+      transition: width 1s ease;
+    }
+    .res-cap-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+ 
+    /* Botones de acción */
+    .res-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .res-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 22px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: .9rem;
+      border: none;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s;
+    }
+    .res-btn:hover { opacity: .88; transform: translateY(-1px); }
+    .res-btn-primary { background: #16a34a; color: #fff; box-shadow: 0 3px 12px rgba(22,163,74,.25); }
+    .res-btn-print   { background: var(--res-surface); color: #374151; border: 1px solid var(--res-border); }
+    .res-btn-back    { background: var(--res-surface); color: #374151; border: 1px solid var(--res-border); }
+    .res-btn-danger  { background: #dc2626; color: #fff; }

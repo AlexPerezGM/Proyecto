@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/autorizacion.php';
 
 function dbh(){
   global $conn, $mysqli;
@@ -20,6 +21,15 @@ function out($arr){
   exit;
 }
 
+if (!is_logged()) {
+  http_response_code(401);
+  out(['ok' => false, 'msg' => 'No autorizado.']);
+}
+if (!has_permission('prestamos')) {
+  http_response_code(403);
+  out(['ok' => false, 'msg' => 'No autorizado.']);
+}
+
 $db = dbh();
 $act = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -35,6 +45,483 @@ function q($db, $sql, $params=[], $types=''){
   }
   if(!$st->execute()) return [false, $st->error];
   return [$st, null];
+}
+
+function toFloatOrNull($v){
+  if ($v === null) return null;
+  if (is_string($v)) {
+    $v = trim($v);
+    if ($v === '') return null;
+    $v = str_replace('%', '', $v);
+    $v = str_replace(',', '.', $v);
+  }
+  if (!is_numeric($v)) return null;
+  return (float)$v;
+}
+
+function toIntOrNull($v){
+  if ($v === null) return null;
+  if (is_string($v)) {
+    $v = trim($v);
+    if ($v === '') return null;
+  }
+  if (!is_numeric($v)) return null;
+  return (int)round((float)$v);
+}
+
+function normalizeRiskLabel($txt){
+  $t = strtolower(trim((string)$txt));
+  if ($t === '') return '';
+  if (strpos($t, 'baj') !== false) return 'Bajo';
+  if (strpos($t, 'med') !== false) return 'Medio';
+  if (strpos($t, 'alt') !== false) return 'Alto';
+  return '';
+}
+
+function riskIdFromLabel($db, $label, $fallback = 2){
+  $label = normalizeRiskLabel($label);
+  if ($label === '') return (int)$fallback;
+
+  [$st, $err] = q($db, "SELECT id_nivel_riesgo FROM cat_nivel_riesgo WHERE nivel = ? LIMIT 1", [$label], 's');
+  if (!$st) return (int)$fallback;
+
+  $row = $st->get_result()->fetch_assoc();
+  $st->close();
+  return (int)($row['id_nivel_riesgo'] ?? $fallback);
+}
+
+function tableColumns($db, $table){
+  static $cache = [];
+  if (isset($cache[$table])) return $cache[$table];
+
+  $cols = [];
+  [$st, $err] = q(
+    $db,
+    "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, DATA_TYPE
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+    [$table],
+    's'
+  );
+
+  if ($st) {
+    $res = $st->get_result();
+    while ($r = $res->fetch_assoc()) {
+      $cols[$r['COLUMN_NAME']] = $r;
+    }
+    $st->close();
+  }
+
+  $cache[$table] = $cols;
+  return $cols;
+}
+
+function firstIdFromTable($db, $table, $idColumn){
+  $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$table);
+  $idColumn = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$idColumn);
+  if ($table === '' || $idColumn === '') return null;
+
+  $sql = "SELECT $idColumn AS id FROM $table ORDER BY $idColumn ASC LIMIT 1";
+  $res = $db->query($sql);
+  if (!$res) return null;
+  $row = $res->fetch_assoc();
+  return $row ? (int)$row['id'] : null;
+}
+
+function inferTypes(array $values){
+  $types = '';
+  foreach ($values as $v) {
+    if (is_int($v)) {
+      $types .= 'i';
+    } elseif (is_float($v)) {
+      $types .= 'd';
+    } else {
+      $types .= 's';
+    }
+  }
+  return $types;
+}
+
+function saveEvaluationProfileFromRequest($db, $id_cliente, $id_prestamo, array $post){
+  $id_cliente = (int)$id_cliente;
+  $id_prestamo = (int)$id_prestamo;
+  if ($id_cliente <= 0 || $id_prestamo <= 0) return;
+
+  $score = toIntOrNull($post['score'] ?? ($post['Score'] ?? null));
+  $deudaExterna = toFloatOrNull($post['deuda_externa'] ?? null);
+  $usoTarjetas = toFloatOrNull($post['uso_tarjetas'] ?? null);
+  $cantidadProductos = toIntOrNull($post['cantidad_productos'] ?? null);
+  $gastosMensuales = toFloatOrNull($post['gastos_mensuales'] ?? null);
+  $idNivelRiesgo = riskIdFromLabel($db, $post['nivel_riesgo'] ?? '', 2);
+
+  $colsEs = tableColumns($db, 'evaluacion_estrategica');
+  if (empty($colsEs)) return;
+
+  $evalWhereCol = isset($colsEs['id_cliente']) ? 'id_cliente' : (isset($colsEs['id_prestamo']) ? 'id_prestamo' : null);
+  $evalWhereVal = ($evalWhereCol === 'id_cliente') ? $id_cliente : $id_prestamo;
+  if ($evalWhereCol === null) return;
+
+  [$stEs, $errEs] = q(
+    $db,
+    "SELECT *
+     FROM evaluacion_estrategica
+     WHERE {$evalWhereCol} = ?
+     ORDER BY id_evaluacion_estrategica DESC
+     LIMIT 1",
+    [$evalWhereVal],
+    'i'
+  );
+  if (!$stEs) return;
+  $es = $stEs->get_result()->fetch_assoc();
+  $stEs->close();
+
+  if ($gastosMensuales !== null && $gastosMensuales >= 0) {
+    [$stIe, $errIe] = q(
+      $db,
+      "SELECT id_ingresos_egresos, ingresos_mensuales
+       FROM ingresos_egresos
+       WHERE id_cliente = ?
+       ORDER BY id_ingresos_egresos DESC
+       LIMIT 1",
+      [$id_cliente],
+      'i'
+    );
+    if ($stIe) {
+      $ie = $stIe->get_result()->fetch_assoc();
+      $stIe->close();
+      if ($ie) {
+        $ingresos = (float)($ie['ingresos_mensuales'] ?? 0);
+        if ($ingresos > 0) {
+          $egresosAjustados = min($gastosMensuales, max(0, $ingresos - 1));
+          q(
+            $db,
+            "UPDATE ingresos_egresos SET egresos_mensuales = ? WHERE id_ingresos_egresos = ?",
+            [$egresosAjustados, (int)$ie['id_ingresos_egresos']],
+            'di'
+          );
+        }
+      }
+    }
+  }
+
+  $ingresosMensuales = null;
+  $egresosMensuales = null;
+  [$stIeNow, $errIeNow] = q(
+    $db,
+    "SELECT ingresos_mensuales, egresos_mensuales
+     FROM ingresos_egresos
+     WHERE id_cliente = ?
+     ORDER BY id_ingresos_egresos DESC
+     LIMIT 1",
+    [$id_cliente],
+    'i'
+  );
+  if ($stIeNow) {
+    $ieNow = $stIeNow->get_result()->fetch_assoc();
+    $stIeNow->close();
+    if ($ieNow) {
+      $ingresosMensuales = toFloatOrNull($ieNow['ingresos_mensuales'] ?? null);
+      $egresosMensuales = toFloatOrNull($ieNow['egresos_mensuales'] ?? null);
+    }
+  }
+
+  if ($score !== null) {
+    [$stPc, $errPc] = q(
+      $db,
+      "SELECT id_puntaje_crediticio, total_transacciones, id_nivel_riesgo
+       FROM puntaje_crediticio
+       WHERE id_cliente = ?
+       ORDER BY id_puntaje_crediticio DESC
+       LIMIT 1",
+      [$id_cliente],
+      'i'
+    );
+
+    if ($stPc) {
+      $pc = $stPc->get_result()->fetch_assoc();
+      $stPc->close();
+
+      if ($pc) {
+        $idPc = (int)$pc['id_puntaje_crediticio'];
+        $trx = (int)($pc['total_transacciones'] ?? 0);
+        $nivel = $idNivelRiesgo > 0 ? $idNivelRiesgo : (int)($pc['id_nivel_riesgo'] ?? 2);
+        q(
+          $db,
+          "UPDATE puntaje_crediticio
+           SET puntaje = ?, id_nivel_riesgo = ?, total_transacciones = ?
+           WHERE id_puntaje_crediticio = ?",
+          [$score, $nivel, $trx, $idPc],
+          'iiii'
+        );
+      } else {
+        q(
+          $db,
+          "INSERT INTO puntaje_crediticio (id_cliente, id_nivel_riesgo, puntaje, total_transacciones)
+           VALUES (?, ?, ?, 0)",
+          [$id_cliente, $idNivelRiesgo, $score],
+          'iii'
+        );
+      }
+    }
+  }
+
+  $scoreActual = null;
+  [$stPcNow, $errPcNow] = q(
+    $db,
+    "SELECT puntaje
+     FROM puntaje_crediticio
+     WHERE id_cliente = ?
+     ORDER BY id_puntaje_crediticio DESC
+     LIMIT 1",
+    [$id_cliente],
+    'i'
+  );
+  if ($stPcNow) {
+    $pcNow = $stPcNow->get_result()->fetch_assoc();
+    $stPcNow->close();
+    $scoreActual = toIntOrNull($pcNow['puntaje'] ?? null);
+  }
+
+  $empresaLaboral = null;
+  [$stOc, $errOc] = q(
+    $db,
+    "SELECT oc.empresa
+     FROM cliente c
+     LEFT JOIN ocupacion oc ON oc.id_datos_persona = c.id_datos_persona
+     WHERE c.id_cliente = ?
+     LIMIT 1",
+    [$id_cliente],
+    'i'
+  );
+  if ($stOc) {
+    $oc = $stOc->get_result()->fetch_assoc();
+    $stOc->close();
+    $empresaLaboral = trim((string)($oc['empresa'] ?? ''));
+  }
+
+  $idTipoVivienda = null;
+  $idSectorEconomico = null;
+  $dependientes = null;
+  $antiguedadEmpleado = null;
+  $fuenteIngresosTxt = '';
+  $perfilCols = tableColumns($db, 'cliente_perfil_socioeconomico');
+  if (!empty($perfilCols)) {
+    $perfilWhereCol = isset($perfilCols['id_cliente']) ? 'id_cliente' : (isset($perfilCols['id_perfil_cliente']) ? 'id_perfil_cliente' : null);
+    if ($perfilWhereCol !== null) {
+    [$stPs, $errPs] = q(
+      $db,
+      "SELECT id_tipo_vivienda, id_sector_economico, cantidad_dependientes, antiguedad_laboral_meses, id_fuente_ingreso, fuente_ingresos
+       FROM cliente_perfil_socioeconomico
+       WHERE {$perfilWhereCol} = ?
+       LIMIT 1",
+      [$id_cliente],
+      'i'
+    );
+    if ($stPs) {
+      $ps = $stPs->get_result()->fetch_assoc();
+      $stPs->close();
+      if ($ps) {
+        $idTipoVivienda = toIntOrNull($ps['id_tipo_vivienda'] ?? null);
+        $idSectorEconomico = toIntOrNull($ps['id_sector_economico'] ?? null);
+        $dependientes = toIntOrNull($ps['cantidad_dependientes'] ?? null);
+        $antiguedadEmpleado = toIntOrNull($ps['antiguedad_laboral_meses'] ?? null);
+        $fuenteIngresosTxt = trim((string)($ps['fuente_ingresos'] ?? ''));
+
+        $idFuente = toIntOrNull($ps['id_fuente_ingreso'] ?? null);
+        if ($idFuente !== null && !empty(tableColumns($db, 'cat_fuente_ingreso'))) {
+          [$stFi, $errFi] = q(
+            $db,
+            "SELECT fuente_ingreso FROM cat_fuente_ingreso WHERE id_fuente_ingreso = ? LIMIT 1",
+            [$idFuente],
+            'i'
+          );
+          if ($stFi) {
+            $fi = $stFi->get_result()->fetch_assoc();
+            $stFi->close();
+            $fuenteCat = trim((string)($fi['fuente_ingreso'] ?? ''));
+            if ($fuenteCat !== '') $fuenteIngresosTxt = $fuenteCat;
+          }
+        }
+      }
+    }
+    }
+  }
+
+  $fechaNacimiento = '';
+  $plazoMeses = null;
+  [$stCli, $errCli] = q(
+    $db,
+    "SELECT dp.fecha_nacimiento, p.plazo_meses
+     FROM cliente c
+     JOIN datos_persona dp ON dp.id_datos_persona = c.id_datos_persona
+     LEFT JOIN prestamo p ON p.id_prestamo = ?
+     WHERE c.id_cliente = ?
+     LIMIT 1",
+    [$id_prestamo, $id_cliente],
+    'ii'
+  );
+  if ($stCli) {
+    $cli = $stCli->get_result()->fetch_assoc();
+    $stCli->close();
+    $fechaNacimiento = (string)($cli['fecha_nacimiento'] ?? '');
+    $plazoMeses = toIntOrNull($cli['plazo_meses'] ?? null);
+  }
+
+  $defaultSector = firstIdFromTable($db, 'cat_sector_economico', 'id_sector_economico');
+  $defaultVivienda = firstIdFromTable($db, 'cat_tipo_vivienda', 'id_tipo_vivienda');
+
+  $scoreFinal = $score ?? $scoreActual ?? toIntOrNull($es['puntaje_crediticio'] ?? null) ?? 0;
+  $deudaTotalFinal = $deudaExterna ?? toFloatOrNull($es['total_deudas_externas'] ?? null) ?? 0.0;
+  $usoTarjetasFinal = $usoTarjetas ?? toFloatOrNull($es['porcentaje_utilizacion_credito'] ?? null) ?? 0.0;
+  $cantidadProductosFinal = $cantidadProductos ?? toIntOrNull($es['cantidad_tarjetas_activas'] ?? null) ?? 0;
+  $gastosFinal = $gastosMensuales ?? $egresosMensuales ?? toFloatOrNull($es['total_gastos_fijos'] ?? null) ?? 0.0;
+
+  $salarioNeto = 0.0;
+  if ($ingresosMensuales !== null) {
+    $salarioNeto = (float)$ingresosMensuales - (float)$gastosFinal;
+  }
+
+  $tipoIngreso = 'fijo';
+  if (preg_match('/variable|comision|independ|negocio|remesa/i', strtolower($fuenteIngresosTxt))) {
+    $tipoIngreso = 'Variable';
+  }
+
+  $empresaLaboralFinal = $empresaLaboral !== null && $empresaLaboral !== ''
+    ? $empresaLaboral
+    : (trim((string)($es['empresa_laboral'] ?? '')) !== '' ? (string)$es['empresa_laboral'] : 'N/D');
+
+  $antiguedadFinal = $antiguedadEmpleado ?? toIntOrNull($es['antiguedad_empleado'] ?? null) ?? 0;
+  $idSectorFinal = $idSectorEconomico ?? toIntOrNull($es['id_sector_economico'] ?? null) ?? $defaultSector;
+  $idViviendaFinal = $idTipoVivienda ?? toIntOrNull($es['id_tipo_vivienda'] ?? null) ?? $defaultVivienda;
+  $dependientesFinal = $dependientes ?? toIntOrNull($es['cantidad_dependientes'] ?? null) ?? 0;
+
+  $edadAlFinalizar = toIntOrNull($es['edad_al_finalizar'] ?? null) ?? 0;
+  if ($fechaNacimiento !== '') {
+    try {
+      $fechaNac = new DateTime($fechaNacimiento);
+      $fechaFinEstimada = new DateTime();
+      if ($plazoMeses !== null && $plazoMeses > 0) {
+        $fechaFinEstimada->modify('+' . $plazoMeses . ' months');
+      }
+      $edadAlFinalizar = (int)$fechaNac->diff($fechaFinEstimada)->y;
+    } catch (Throwable $__) {
+      // Ignorar fecha inválida.
+    }
+  }
+
+  $maxPorcCap = 0.40;
+  [$stCfg, $errCfg] = q(
+    $db,
+    "SELECT valor_decimal
+     FROM configuracion
+     WHERE nombre_configuracion = 'MAX_PORCENTAJE_CAPACIDAD_PAGO' AND estado = 'Activo'
+     LIMIT 1"
+  );
+  if ($stCfg) {
+    $cfg = $stCfg->get_result()->fetch_assoc();
+    $stCfg->close();
+    $cfgVal = toFloatOrNull($cfg['valor_decimal'] ?? null);
+    if ($cfgVal !== null && $cfgVal > 0) $maxPorcCap = $cfgVal;
+  }
+
+  $deudaMensualAprox = $deudaTotalFinal > 0 ? ($deudaTotalFinal / 12) : 0.0;
+  $capacidadPagoFinal = toFloatOrNull($es['capacidad_pago'] ?? null) ?? 0.0;
+  $nivelEndeudamientoFinal = toFloatOrNull($es['nivel_endeudamiento'] ?? null) ?? 0.0;
+  if ($ingresosMensuales !== null && $ingresosMensuales > 0) {
+    $ingresoNeto = (float)$ingresosMensuales - (float)$gastosFinal;
+    $capacidadPagoFinal = round(($ingresoNeto * $maxPorcCap) - $deudaMensualAprox, 2);
+    $nivelEndeudamientoFinal = round((((float)$gastosFinal + $deudaMensualAprox) / (float)$ingresosMensuales) * 100, 2);
+  }
+
+  $setData = [];
+  if (isset($colsEs['id_prestamo'])) $setData['id_prestamo'] = $id_prestamo;
+  if (isset($colsEs['salario_neto'])) $setData['salario_neto'] = $salarioNeto;
+  if (isset($colsEs['tipo_ingreso'])) $setData['tipo_ingreso'] = $tipoIngreso;
+  if (isset($colsEs['empresa_laboral'])) $setData['empresa_laboral'] = $empresaLaboralFinal;
+  if (isset($colsEs['antiguedad_empleado'])) $setData['antiguedad_empleado'] = $antiguedadFinal;
+  if (isset($colsEs['id_sector_economico']) && $idSectorFinal !== null) $setData['id_sector_economico'] = $idSectorFinal;
+  if (isset($colsEs['puntaje_crediticio'])) $setData['puntaje_crediticio'] = $scoreFinal;
+  if (isset($colsEs['cantidad_tarjetas_activas'])) $setData['cantidad_tarjetas_activas'] = $cantidadProductosFinal;
+  if (isset($colsEs['porcentaje_utilizacion_credito'])) $setData['porcentaje_utilizacion_credito'] = $usoTarjetasFinal;
+  if (isset($colsEs['total_deudas_externas'])) $setData['total_deudas_externas'] = $deudaTotalFinal;
+  if (isset($colsEs['total_gastos_fijos'])) $setData['total_gastos_fijos'] = $gastosFinal;
+  if (isset($colsEs['capacidad_pago'])) $setData['capacidad_pago'] = $capacidadPagoFinal;
+  if (isset($colsEs['nivel_endeudamiento'])) $setData['nivel_endeudamiento'] = $nivelEndeudamientoFinal;
+  if (isset($colsEs['id_tipo_vivienda']) && $idViviendaFinal !== null) $setData['id_tipo_vivienda'] = $idViviendaFinal;
+  if (isset($colsEs['cantidad_dependientes'])) $setData['cantidad_dependientes'] = $dependientesFinal;
+  if (isset($colsEs['edad_al_finalizar'])) $setData['edad_al_finalizar'] = $edadAlFinalizar;
+
+  if ($es) {
+    if (!empty($setData)) {
+      $sets = [];
+      $vals = [];
+      foreach ($setData as $col => $val) {
+        $sets[] = "$col = ?";
+        $vals[] = $val;
+      }
+      $vals[] = (int)$es['id_evaluacion_estrategica'];
+      $types = inferTypes($vals);
+      q(
+        $db,
+        "UPDATE evaluacion_estrategica SET " . implode(', ', $sets) . " WHERE id_evaluacion_estrategica = ?",
+        $vals,
+        $types
+      );
+    }
+    return;
+  }
+
+  $insertData = [];
+
+  $baseCandidates = [
+    'id_cliente' => $id_cliente,
+    'id_prestamo' => $id_prestamo,
+    'salario_neto' => $salarioNeto,
+    'tipo_ingreso' => $tipoIngreso,
+    'empresa_laboral' => $empresaLaboralFinal,
+    'antiguedad_empleado' => $antiguedadFinal,
+    'id_sector_economico' => $idSectorFinal,
+    'puntaje_crediticio' => $scoreFinal,
+    'cantidad_tarjetas_activas' => $cantidadProductosFinal,
+    'porcentaje_utilizacion_credito' => $usoTarjetasFinal,
+    'total_deudas_externas' => $deudaTotalFinal,
+    'total_gastos_fijos' => $gastosFinal,
+    'capacidad_pago' => $capacidadPagoFinal,
+    'nivel_endeudamiento' => $nivelEndeudamientoFinal,
+    'id_tipo_vivienda' => $idViviendaFinal,
+    'cantidad_dependientes' => $dependientesFinal,
+    'edad_al_finalizar' => $edadAlFinalizar,
+  ];
+
+  foreach ($baseCandidates as $col => $val) {
+    if (isset($colsEs[$col]) && $val !== null) {
+      $insertData[$col] = $val;
+    }
+  }
+
+  $missingRequired = [];
+  foreach ($colsEs as $colName => $meta) {
+    $required = strtoupper((string)$meta['IS_NULLABLE']) === 'NO'
+      && $meta['COLUMN_DEFAULT'] === null
+      && stripos((string)$meta['EXTRA'], 'auto_increment') === false;
+    if ($required && !array_key_exists($colName, $insertData)) {
+      $missingRequired[] = $colName;
+    }
+  }
+
+  if (!empty($missingRequired)) return;
+
+  $cols = array_keys($insertData);
+  if (empty($cols)) return;
+  $vals = array_values($insertData);
+  $place = implode(',', array_fill(0, count($cols), '?'));
+  $types = inferTypes($vals);
+  q(
+    $db,
+    "INSERT INTO evaluacion_estrategica (" . implode(',', $cols) . ") VALUES (" . $place . ")",
+    $vals,
+    $types
+  );
 }
 
 function moneyDOP($db, $monto, $id_moneda){
@@ -335,24 +822,40 @@ if ($act==='crear_personal'){
     if(!$st2) throw new Exception($e2);
     $id_cond = $db->insert_id;
     
-    [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
-    id_tipo_prestamo,
-    numero_contrato,
-    monto_solicitado,
-    fecha_solicitud,
-    plazo_meses,
-    id_estado_prestamo,
-    id_condicion_actual,
-    id_politica_cancelacion,
-    creado_por) 
-    VALUES (?,?,?,?,?,?,2,?,?,1)",
-                  [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond, $id_politica],'iisdsiii');
+    if ($id_politica === null) {
+      [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
+      id_tipo_prestamo,
+      numero_contrato,
+      monto_solicitado,
+      fecha_solicitud,
+      plazo_meses,
+      id_estado_prestamo,
+      id_condicion_actual,
+      creado_por)
+      VALUES (?,?,?,?,?,?,2,?,1)",
+                    [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond],'iisdsii');
+    } else {
+      [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
+      id_tipo_prestamo,
+      numero_contrato,
+      monto_solicitado,
+      fecha_solicitud,
+      plazo_meses,
+      id_estado_prestamo,
+      id_condicion_actual,
+      id_politica_cancelacion,
+      creado_por)
+      VALUES (?,?,?,?,?,?,2,?,?,1)",
+                    [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond,$id_politica],'iisdsiii');
+    }
     if(!$st) throw new Exception($err);
    
     $id_p = $db->insert_id;
     
     q($db, "INSERT INTO prestamo_personal (id_prestamo,motivo) 
     VALUES (?,?)", [$id_p,$motivo], 'is');
+
+    saveEvaluationProfileFromRequest($db, $id_cliente, $id_p, $_POST);
 
     list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
     if (!$ok) 
@@ -439,18 +942,32 @@ if ($act==='crear_hipotecario'){
       throw new Exception($e2);
     $id_cond = $db->insert_id;
     
-    [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
-    id_tipo_prestamo,
-    numero_contrato,
-    monto_solicitado,
-    fecha_solicitud,
-    plazo_meses,
-    id_estado_prestamo,
-    id_condicion_actual,
-    id_politica_cancelacion,
-    creado_por) 
-    VALUES (?,?,?,?,?,?,2,?,?,1)",
-            [$id_cliente,2,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond, $id_politica],'iisdsiii');
+        if ($id_politica === null) {
+          [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
+          id_tipo_prestamo,
+          numero_contrato,
+          monto_solicitado,
+          fecha_solicitud,
+          plazo_meses,
+          id_estado_prestamo,
+          id_condicion_actual,
+          creado_por)
+          VALUES (?,?,?,?,?,?,2,?,1)",
+            [$id_cliente,2,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond],'iisdsii');
+        } else {
+          [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
+          id_tipo_prestamo,
+          numero_contrato,
+          monto_solicitado,
+          fecha_solicitud,
+          plazo_meses,
+          id_estado_prestamo,
+          id_condicion_actual,
+          id_politica_cancelacion,
+          creado_por)
+          VALUES (?,?,?,?,?,?,2,?,?,1)",
+            [$id_cliente,2,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond,$id_politica],'iisdsiii');
+        }
     if(!$st) 
       throw new Exception($err);
     $id_p = $db->insert_id;
@@ -461,6 +978,8 @@ if ($act==='crear_hipotecario'){
      direccion_propiedad) 
      VALUES (?,?,?,?)",
        [$id_p,$valor_dop,$porc,$dir],'idds');
+
+    saveEvaluationProfileFromRequest($db, $id_cliente, $id_p, $_POST);
     
     list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
     if (!$ok) 
@@ -856,19 +1375,50 @@ if ($act === 'procesar_cancelacion'){
 if ($act === 'ejecutar_garantia'){
   $id_prestamo = (int)($_POST['id_prestamo'] ?? 0);
   $observacion = $_POST['observacion'] ?? 'Ejecucion por mora excesiva';
+  if ($id_prestamo <= 0) {
+    out(['ok' => false, 'msg' => 'ID de préstamo inválido.']);
+  }
 
   $db->autocommit(false);
   try {
-    $id_estado_g = $db ->query("SELECT id_estado_garantia
-                                FROM cat_estado_garantia
-                                WHERE estado = 'Garantia Usada'
-                                LIMIT 1")->fetch_row()[0] ?? 0;
+    [$st_est, $err_est] = q($db, "SELECT id_estado_prestamo
+                                  FROM cat_estado_prestamo
+                                  WHERE estado = 'Garantia usada'
+                                  LIMIT 1");
+    if (!$st_est) throw new Exception($err_est ?: "No se pudo consultar el estado de garantía usada.");
+    $row_est = $st_est->get_result()->fetch_assoc();
+    $st_est->close();
+
+    $id_estado_g = (int)($row_est['id_estado_prestamo'] ?? 0);
     if (!$id_estado_g) throw new Exception("Estado 'Garantia Usada' no existe.");
 
-    $db->query("UPDATE prestamo SET id_estado_prestamo=$id_prestamo_g 
-                WHERE id_prestamo=$id_prestamo");
-    $db->query("INSERT INTO ejecucion_garantia (id_prestamo, fecha_ejecucion, valor_adjudicado, observaciones)
-                VALUES (?, CURDATE(), 0, ?)");
+    [$st_upd, $err_upd] = q($db, "UPDATE prestamo SET id_estado_prestamo=? WHERE id_prestamo=?", [$id_estado_g, $id_prestamo], 'ii');
+    if (!$st_upd) throw new Exception($err_upd ?: "No se pudo actualizar el estado del préstamo.");
+
+    [$st_g, $err_g] = q($db, "SELECT id_garantia FROM garantia WHERE id_prestamo=? ORDER BY id_garantia DESC LIMIT 1", [$id_prestamo], 'i');
+    if (!$st_g) throw new Exception($err_g ?: "No se pudo consultar la garantía del préstamo.");
+    $row_g = $st_g->get_result()->fetch_assoc();
+    $st_g->close();
+    $id_garantia = (int)($row_g['id_garantia'] ?? 0);
+
+    if ($id_garantia > 0) {
+      [$st_ej, $err_ej] = q(
+        $db,
+        "INSERT INTO ejecucion_garantia (id_prestamo, id_garantia, fecha_ejecucion, valor_adjudicado, observacion)
+         VALUES (?, ?, CURDATE(), 0, ?)",
+        [$id_prestamo, $id_garantia, $observacion],
+        'iis'
+      );
+    } else {
+      [$st_ej, $err_ej] = q(
+        $db,
+        "INSERT INTO ejecucion_garantia (id_prestamo, fecha_ejecucion, valor_adjudicado, observacion)
+         VALUES (?, CURDATE(), 0, ?)",
+        [$id_prestamo, $observacion],
+        'is'
+      );
+    }
+    if (!$st_ej) throw new Exception($err_ej ?: "No se pudo registrar la ejecución de garantía.");
 
     $db->commit();
     out(['ok' => true, 'msg' => 'Garantia ejecutada correctamente.']);
@@ -893,7 +1443,7 @@ if ($act === 'historial_cliente'){
            (SELECT COUNT(*) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo AND cc.estado_cuota = 'Pendiente' AND cc.fecha_vencimiento < CURDATE()) AS cuotas_atrasadas,
            (SELECT COALESCE(SUM(total_monto), 0) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo) AS saldo_actual,
            (SELECT COALESCE(total_monto, 0) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo AND cc.estado_cuota = 'Pendiente' ORDER BY cc.fecha_vencimiento ASC LIMIT 1) AS total_a_pagar,
-           (SELECT COUNT(*) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo AND cc.estado_cuota = 'Pagado') AS cuotas_pagadas
+              (SELECT COUNT(*) FROM cronograma_cuota cc WHERE cc.id_prestamo = p.id_prestamo AND cc.estado_cuota = 'Pagada') AS cuotas_pagadas
     FROM prestamo p
     LEFT JOIN cat_estado_prestamo cep ON cep.id_estado_prestamo = p.id_estado_prestamo
     WHERE p.id_cliente = ?
@@ -922,8 +1472,10 @@ if ($act === 'historial_cliente'){
     'ok' => true,
     'historial' => $prestamos,
     'promocion' => [
-      'aplica' => $aplica_promo,
-      'mensaje' => $mensaje_promo
+      'aplica' => $tiene_historial && !$tiene_atrasos,
+      'mensaje' => ($tiene_historial && !$tiene_atrasos)
+        ? 'Cliente elegible para promoción por buen historial.'
+        : 'Cliente no elegible para promoción por historial de pagos.'
     ]
   ]);
 }

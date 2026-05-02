@@ -1,0 +1,282 @@
+PRUEBAS GUI - INGRESO MANUAL DE DATOS (SIN SQL)
+
+Objetivo
+Registrar clientes y prestamos desde la interfaz grafica para validar resultados distintos de evaluacion:
+1) Aprobado
+2) Contrapropuesta
+3) Rechazado
+4) Revision_manual
+
+Regla principal
+- NO usar phpMyAdmin para insertar datos.
+- TODO se captura desde pantallas del sistema.
+
+
+============================================================
+1. RUTA DE PRUEBA (100% GUI)
+============================================================
+
+A. Modulo Clientes:
+- Registrar 4 clientes con los datos de este documento.
+
+B. Modulo Prestamos:
+- Buscar cada cliente.
+- Crear un prestamo personal por cliente.
+- Enviar con boton "Evaluar prestamo".
+
+C. Pantalla Evaluacion:
+- El sistema redirige automaticamente a Evaluacion.
+- Esperar fin de evaluacion y abrir resultados.
+
+D. Verificacion:
+- Revisar decision final en Resultado o Contrapropuesta.
+- Opcional: revisar el mismo prestamo en Seguimiento.
+
+
+============================================================
+2. CAMPOS IMPORTANTES QUE DEBES LLENAR
+============================================================
+
+En Clientes (Registrar cliente), son claves para la evaluacion:
+- Identidad: nombre, apellido, fecha nacimiento, tipo/numero documento, genero, telefono, email.
+- Socioeconomico: tipo vivienda, dependientes, direccion.
+- Laboral: ocupacion, empresa, antiguedad laboral, sector laboral, ingresos mensuales, fuente ingresos, egresos mensuales.
+
+Validaciones a respetar:
+- Cliente mayor de edad.
+- Ingresos mensuales >= 10000.
+- Ingresos > egresos.
+
+En Prestamos (Solicitud de prestamo personal):
+- Monto solicitado.
+- Plazo (meses).
+- Gastos mensuales (pestana Datos financieros).
+- Politica de cancelacion.
+- Luego: boton "Evaluar prestamo".
+
+
+============================================================
+3. DATOS PARA CAPTURAR EN GUI
+============================================================
+
+NOTA
+- Usa documentos y correos unicos para evitar duplicados.
+- Si tu ambiente trae catalogos diferentes, elige la opcion equivalente (ej. sector Privado/Publico/Independiente).
+
+------------------------------
+CASO 1 - ESPERADO: APROBADO
+------------------------------
+
+Cliente
+- Nombre: Ana
+- Apellido: Mejia
+- Fecha nacimiento: 1990-04-10
+- Tipo documento: Cedula
+- Numero documento: 001-9004100-4
+- Genero: Femenino
+- Telefono: 809-701-1101
+- Email: ana.mejia.aprobado@test.com
+
+Socioeconomico
+- Tipo vivienda: Familiar
+- Dependientes: 1
+- Ciudad: Santo Domingo
+- Sector: Naco
+- Calle: Calle 1
+- Numero casa: 12
+
+Laboral
+- Ocupacion: Analista financiera
+- Empresa: Grupo Orion
+- Antiguedad laboral (meses): 36
+- Sector laboral: Privado
+- Ingresos mensuales: 120000
+- Fuente ingresos: Sueldo fijo
+- Egresos mensuales: 30000
+
+Prestamo personal
+- Monto solicitado: 120000
+- Plazo: 24 meses
+- Gastos mensuales (en formulario de prestamo): 30000
+- Politica de cancelacion: Estandar (o activa por defecto)
+
+Resultado esperado
+- Decision: Aprobado
+
+
+--------------------------------------
+CASO 2 - ESPERADO: CONTRAPROPUESTA
+--------------------------------------
+
+Cliente
+- Nombre: Luis
+- Apellido: Rosario
+- Fecha nacimiento: 1992-09-15
+- Tipo documento: Cedula
+- Numero documento: 001-9209150-2
+- Genero: Masculino
+- Telefono: 809-701-1102
+- Email: luis.rosario.cp@test.com
+
+Socioeconomico
+- Tipo vivienda: Alquilada
+- Dependientes: 2
+- Ciudad: Santo Domingo
+- Sector: Villa Juana
+- Calle: Calle 2
+- Numero casa: 18
+
+Laboral
+- Ocupacion: Trabajador independiente
+- Empresa: Negocio propio
+- Antiguedad laboral (meses): 14
+- Sector laboral: Independiente
+- Ingresos mensuales: 80000
+- Fuente ingresos: Variable
+- Egresos mensuales: 45000
+
+Prestamo personal
+- Monto solicitado: 400000
+- Plazo: 24 meses
+- Gastos mensuales (en formulario de prestamo): 45000
+- Politica de cancelacion: Estandar (o activa por defecto)
+
+Resultado esperado
+- Decision: Contrapropuesta
+- Debe mostrar opciones de monto/plazo.
+
+
+-------------------------------
+CASO 3 - ESPERADO: RECHAZADO
+-------------------------------
+
+Cliente
+- Nombre: Pedro
+- Apellido: Salazar
+- Fecha nacimiento: 1988-12-01
+- Tipo documento: Cedula
+- Numero documento: 001-8812010-9
+- Genero: Masculino
+- Telefono: 809-701-1103
+- Email: pedro.salazar.rechazo@test.com
+
+Socioeconomico
+- Tipo vivienda: Alquilada
+- Dependientes: 3
+- Ciudad: Santo Domingo
+- Sector: Los Mina
+- Calle: Calle 3
+- Numero casa: 22
+
+Laboral
+- Ocupacion: Empleado temporal
+- Empresa: Servicios Delta
+- Antiguedad laboral (meses): 4
+- Sector laboral: Privado
+- Ingresos mensuales: 20000
+- Fuente ingresos: Sueldo fijo
+- Egresos mensuales: 5000
+
+Prestamo personal
+- Monto solicitado: 300000
+- Plazo: 12 meses
+- Gastos mensuales (en formulario de prestamo): 5000
+- Politica de cancelacion: Estandar (o activa por defecto)
+
+Resultado esperado
+- Decision: Rechazado
+
+
+--------------------------------------
+CASO 4 - ESPERADO: REVISION_MANUAL
+--------------------------------------
+
+Cliente
+- Nombre: Carla
+- Apellido: Mendez
+- Fecha nacimiento: 1995-03-22
+- Tipo documento: Cedula
+- Numero documento: 001-9503220-6
+- Genero: Femenino
+- Telefono: 809-701-1104
+- Email: carla.mendez.rm@test.com
+
+Socioeconomico
+- Tipo vivienda: Alquilada
+- Dependientes: 3
+- Ciudad: Santo Domingo
+- Sector: Cristo Rey
+- Calle: Calle 4
+- Numero casa: 9
+
+Laboral
+- Ocupacion: Asistente administrativa
+- Empresa: Comercial ABC
+- Antiguedad laboral (meses): 8
+- Sector laboral: Privado
+- Ingresos mensuales: 70000
+- Fuente ingresos: Sueldo fijo
+- Egresos mensuales: 20000
+
+Prestamo personal
+- Monto solicitado: 120000
+- Plazo: 12 meses
+- Gastos mensuales (en formulario de prestamo): 20000
+- Politica de cancelacion: Estandar (o activa por defecto)
+
+Resultado esperado
+- Decision: Revision_manual
+
+
+============================================================
+4. COMO EJECUTAR CADA PRUEBA (PASOS CORTOS)
+============================================================
+
+Para cada caso:
+1. Ir a Clientes -> Registrar cliente.
+2. Llenar Identidad, Socioeconomico y Laboral.
+3. Guardar cliente.
+4. Ir a Prestamos.
+5. Buscar cliente por nombre o documento.
+6. Click en Prestamo personal.
+7. Completar monto, plazo y gastos mensuales.
+8. Click en Evaluar prestamo.
+9. Esperar pantalla de Evaluacion.
+10. Click en Ver resultados completos (o Ver contrapropuestas).
+
+
+============================================================
+5. SI NO COINCIDE EXACTAMENTE EL RESULTADO
+============================================================
+
+En algunos ambientes pueden variar reglas activas, score externo o intervalos.
+Si pasa eso, ajusta solo estos campos y reintenta:
+
+Para mover a Aprobado:
+- Bajar monto solicitado.
+- Aumentar plazo.
+- Bajar gastos mensuales.
+
+Para mover a Contrapropuesta:
+- Subir monto hasta que la cuota supere ligeramente la capacidad.
+- Mantener perfil de riesgo medio (no extremo).
+
+Para mover a Rechazado:
+- Subir monto y/o bajar plazo para elevar cuota.
+- Subir gastos mensuales para reducir capacidad.
+
+Para mover a Revision_manual:
+- Mantener puntaje medio y agregar una friccion moderada (ej. gasto algo alto, pero no extremo).
+
+
+============================================================
+6. CHECKLIST DE ACEPTACION
+============================================================
+
+- Se pudieron registrar 4 clientes por GUI sin errores.
+- Se pudo crear y evaluar 1 prestamo por cada cliente.
+- Se observaron decisiones distintas entre casos.
+- El caso de contrapropuesta mostro opciones de ajuste.
+- Cada caso mostro puntaje, capacidad, cuota y nivel de riesgo en pantalla.
+
+Fin del documento.

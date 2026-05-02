@@ -217,3 +217,30 @@ body {
   outline: none;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
+
+/* Pestañas para el formulario de clientes */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tab-btn.active {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4338ca;
+}
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.docs-list { margin-top: 10px; }

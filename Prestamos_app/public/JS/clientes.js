@@ -51,6 +51,48 @@
     } catch (e) { }
   };
 
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-tab');
+      if (target) {
+        activarPestana(target);
+      }
+    });
+  });
+
+  function activarPestana(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
+    });
+    document.querySelectorAll('.tab-pane').forEach(p => {
+      p.classList.toggle('active', p.id === tabId);
+    });
+  }
+
+  function validarFormularioPorPestanas(form) {
+    const controls = Array.from(form.elements || []);
+    const firstInvalid = controls.find(ctrl => {
+      if (!ctrl || typeof ctrl.checkValidity !== 'function') return false;
+      if (!ctrl.willValidate) return false;
+      return !ctrl.checkValidity();
+    });
+
+    if (!firstInvalid) return true;
+
+    const pane = firstInvalid.closest('.tab-pane');
+    if (pane && pane.id) {
+      activarPestana(pane.id);
+    }
+
+    if (typeof firstInvalid.focus === 'function') {
+      firstInvalid.focus();
+    }
+    if (typeof firstInvalid.reportValidity === 'function') {
+      firstInvalid.reportValidity();
+    }
+    return false;
+  }
+
   document.querySelectorAll('[data-close]').forEach(b => {
     b.addEventListener('click', () => closeModal(b.closest('.modal')));
   });
@@ -203,6 +245,10 @@
     const cats = await jsonFetch(API, new URLSearchParams({ action: 'catalogos' }));
     const $gen = document.getElementById('genero_modal');
     const $td = document.getElementById('id_tipo_documento_modal');
+    const $tv = document.getElementById('tipo_vivienda');
+    const $sl = document.getElementById('sector_laboral');
+    const $fi = document.getElementById('fuente_ingresos');
+
     if (Array.isArray(cats.generos) && $gen) {
       $gen.innerHTML = '<option value="">Seleccione…</option>' +
         cats.generos.map(g => `<option value="${g.id_genero}">${g.genero}</option>`).join('');
@@ -210,6 +256,21 @@
     if (Array.isArray(cats.tipos_documento) && $td) {
       $td.innerHTML = '<option value="">Seleccione…</option>' +
         cats.tipos_documento.map(t => `<option value="${t.id_tipo_documento}">${t.tipo_documento}</option>`).join('');
+    }
+
+    if (Array.isArray(cats.tipos_vivienda) && $tv) {
+      $tv.innerHTML = '<option value="">Seleccione…</option>' +
+        cats.tipos_vivienda.map(v => `<option value="${v.id_tipo_vivienda}">${v.tipo_vivienda}</option>`).join('');
+    }
+
+    if (Array.isArray(cats.sectores_economicos) && $sl) {
+      $sl.innerHTML = '<option value="">Seleccione…</option>' +
+        cats.sectores_economicos.map(s => `<option value="${s.id_sector_economico}">${s.sector}</option>`).join('');
+    }
+
+    if (Array.isArray(cats.fuentes_ingreso) && $fi) {
+      $fi.innerHTML = '<option value="">Seleccione…</option>' +
+        cats.fuentes_ingreso.map(f => `<option value="${f.id_fuente_ingreso || f.fuente_ingreso}">${f.fuente_ingreso}</option>`).join('');
     }
   }
   document.addEventListener('DOMContentLoaded', cargarCatalogos);
@@ -443,7 +504,11 @@
               <h4>Información financiera</h4>
               <p><b>Ingresos:</b> $${(+c.ingresos_mensuales || 0).toFixed(2)}</p>
               <p><b>Egresos:</b> $${(+c.egresos_mensuales || 0).toFixed(2)}</p>
-              <p><b>Fuente:</b> ${c.fuente || '-'}</p>
+              <p><b>Fuente:</b> ${c.fuente_ingresos || c.fuente || '-'}</p>
+              <p><b>Tipo de vivienda:</b> ${c.tipo_vivienda || '-'}</p>
+              <p><b>Personas a cargo:</b> ${c.dependientes ?? 0}</p>
+              <p><b>Antigüedad laboral (meses):</b> ${c.antiguedad_laboral ?? 0}</p>
+              <p><b>Sector laboral:</b> ${c.sector_laboral || '-'}</p>
               <p><b>Ocupación:</b> ${c.ocupacion || '-'} (${c.empresa || '-'})</p>
             </div>
             <div>
@@ -580,12 +645,27 @@
         id_tipo_documento: 'id_tipo_documento_modal', numero_documento: 'numero_documento',
         telefono: 'telefono', email: 'email',
         ciudad: 'ciudad', sector: 'sector', calle: 'calle', numero_casa: 'numero_casa',
-        ingresos_mensuales: 'ingresos_mensuales', fuente: 'fuente_ingresos',
-        egresos_mensuales: 'egresos_mensuales', ocupacion: 'ocupacion', empresa: 'empresa'
+        ingresos_mensuales: 'ingresos_mensuales',
+        egresos_mensuales: 'egresos_mensuales',
+        ocupacion: 'ocupacion', empresa: 'empresa',
+        id_tipo_vivienda: 'tipo_vivienda',
+        dependientes: 'dependientes',
+        antiguedad_laboral: 'antiguedad_laboral',
+        id_sector_economico: 'sector_laboral'
       };
       for (const k in map) {
         const el = document.getElementById(map[k]); if (el) el.value = c[k] ?? '';
       }
+
+      const fuenteEl = document.getElementById('fuente_ingresos');
+      if (fuenteEl) {
+        if (c.id_fuente_ingreso && Number(c.id_fuente_ingreso) > 0) {
+          fuenteEl.value = String(c.id_fuente_ingreso);
+        } else {
+          fuenteEl.value = c.fuente_ingresos || c.fuente || '';
+        }
+      }
+
       prepareDocsUIForEdit(c.id_cliente);
       openModal($modalForm);
     }
@@ -615,6 +695,11 @@
 
   $frm.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    if (!validarFormularioPorPestanas($frm)) {
+      return;
+    }
+
     const fn = document.getElementById('fecha_nacimiento').value;
     if (!esMayorDeEdad(fn))
       return alert('El cliente debe ser mayor de edad.');

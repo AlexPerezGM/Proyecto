@@ -3,10 +3,123 @@
   const API_CLIENTES = (window.APP_BASE || '/') + 'api/clientes.php';
 
   const $err = document.getElementById('errorBox');
+  function habilitarUI_docsParaCliente() {
+    const tipo = document.getElementById('tipo_doc_cliente');
+    const archivo = document.getElementById('archivo_doc');
+    const btn = document.getElementById('btnSubirDoc');
+    if (!tipo || !archivo || !btn) return;
+    if (!tipo.dataset.docsInit) {
+      tipo.addEventListener('change', () => {
+        const ok = !!tipo.value;
+        archivo.disabled = !ok;
+        btn.disabled = !ok;
+      });
+      tipo.dataset.docsInit = '1';
+    }
+    const ok = !!tipo.value;
+    archivo.disabled = !ok;
+    btn.disabled = !ok;
+  }
   const openModal = el => el.classList.add('show');
   const closeModal = el => el.classList.remove('show');
+  let clienteSeleccionado = null;
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeModal(b.closest('.modal'))));
   window.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modal.show').forEach(m => closeModal(m)); } });
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modal = btn.closest('.modal');
+      const scopeBtns = modal ? modal.querySelectorAll('.tab-btn') : document.querySelectorAll('.tab-btn');
+      scopeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const scope = modal || document;
+      scope.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('show'));
+
+      const targetId = btn.getAttribute('data-tab');
+      const target = document.getElementById(targetId);
+      if (target && (!modal || modal.contains(target))) target.classList.add('show');
+    });
+  });
+
+  async function consultarDataCredito(cedula, Tprestamo) {
+    if (!cedula) return;
+    // normalizar cédula
+    cedula = ('' + cedula).replace(/\D+/g, '');
+    try {
+      const $scoreEl = document.getElementById(`${Tprestamo}_score`);
+      const $nivelEl = document.getElementById(`${Tprestamo}_nivel_riesgo`);
+      const $deudaEl = document.getElementById(`${Tprestamo}_deuda_externa`);
+      const $usoEl = document.getElementById(`${Tprestamo}_uso_tarjetas`);
+      const $productosEl = document.getElementById(`${Tprestamo}_cantidad_productos`);
+
+      if ($scoreEl) $scoreEl.value = '';
+      if ($nivelEl) $nivelEl.value = '';
+      if ($deudaEl) $deudaEl.value = '';
+      if ($usoEl) $usoEl.value = '';
+      if ($productosEl) $productosEl.value = '';
+
+      const resp = await fetch(`${window.APP_BASE}api/fake_datacredito.php?cedula=${encodeURIComponent(cedula)}`);
+      const raw = await resp.text();
+      let json = null;
+      try {
+        json = JSON.parse(raw);
+      } catch (_) {
+        const ini = raw.indexOf('{');
+        const fin = raw.lastIndexOf('}');
+        if (ini !== -1 && fin !== -1 && fin > ini) {
+          try { json = JSON.parse(raw.slice(ini, fin + 1)); } catch (_) { }
+        }
+      }
+
+      if (!json) {
+        throw new Error('Respuesta no JSON de DataCrédito: ' + raw.slice(0, 300));
+      }
+
+      if (json.ok && json.data){
+        const d = json.data;
+
+        // score
+        if ($scoreEl) $scoreEl.value = d.score?.valor ?? '';
+
+        // nivel riesgo
+        const nivel = d.score?.riesgo ?? d.score?.nivel ?? '';
+        if ($nivelEl) $nivelEl.value = nivel;
+
+        // deuda externa
+        const deudaRaw = d.resumen_crediticio?.total_cuotas_mensuales
+          ?? d.resumen_crediticio?.deuda_externa
+          ?? d.resumen_crediticio?.deuda_total
+          ?? '';
+        const deudaNum = parseFloat(deudaRaw);
+        if ($deudaEl) $deudaEl.value = isNaN(deudaNum) ? '' : deudaNum.toFixed(2);
+
+        // uso tarjetas
+        const usoRaw = d.resumen_crediticio?.total_utilizacion_tarjetas ?? '';
+        const usoNum = (typeof usoRaw === 'string') ? parseFloat(usoRaw.replace('%','')) : (parseFloat(usoRaw) || '');
+        if ($usoEl) $usoEl.value = isNaN(usoNum) ? '' : usoNum;
+
+        // cantidad de productos crediticios (tarjetas y otros)
+        const productosRaw = d.resumen_crediticio?.cantidad_productos ?? '';
+        const productosNum = parseInt(productosRaw, 10);
+        if ($productosEl) $productosEl.value = Number.isNaN(productosNum) ? '' : productosNum;
+      }
+    }catch (error){
+      console.error("Error consultadno DataCrédito:", error);
+    }
+  }
+
+  document.getElementById('btnPrestamoPersonal')?.addEventListener('click', () => {
+    if (clienteSeleccionado && clienteSeleccionado.numero_documento) {
+      consultarDataCredito(clienteSeleccionado.numero_documento, 'p');
+    }
+  });
+
+  document.getElementById('btnPrestamoHipotecario')?.addEventListener('click', () => {
+    if(clienteSeleccionado && clienteSeleccionado.numero_documento){
+      consultarDataCredito(clienteSeleccionado.numero_documento, 'h');
+    }
+  });
 
   async function jsonFetch(url, body) {
     if ($err) $err.hidden = true;
@@ -33,6 +146,20 @@
     }
   }
 
+  document.addEventListener('change', (e) => {
+    // Para el préstamo Personal
+    if (e.target.id === 'check_tiene_garantia_p') {
+        const wrapper = document.getElementById('wrapper_garantia_personal');
+        wrapper.style.display = e.target.checked ? 'block' : 'none';
+        wrapper.querySelectorAll('input, select').forEach(el => el.required = e.target.checked);
+    }
+    // Para el préstamo Hipotecario
+    if (e.target.id === 'check_garantia_hipo') {
+        const wrapper = document.getElementById('wrapper_garantia_hipo');
+        wrapper.style.display = e.target.checked ? 'block' : 'none';
+    }
+});
+
   // Catálogos y moneda
   const $selMoneda = document.getElementById('selMoneda');
   let MONEDAS = [];
@@ -51,11 +178,9 @@
     POLITICAS = js.data?.politicas || [];
 
     $selMoneda.innerHTML = MONEDAS.map(m => `<option value="${m.id}">${m.txt}</option>`).join('');
-    // Popular moneda en cancelación si existe el select
     const $monCan = document.getElementById('moneda_cancelacion');
     if ($monCan) {
       $monCan.innerHTML = MONEDAS.map(m => `<option value="${m.id}">${m.txt}</option>`).join('');
-      // por defecto usar la seleccionada en topbar
       $monCan.value = $selMoneda?.value || (MONEDAS[0]?.id ?? '1');
     }
 
@@ -191,6 +316,9 @@
       empresa: clienteData.empresa || '-'
     };
 
+    // también actualizar referencia usada por otras funciones
+    clienteSeleccionado = clienteData;
+
     LAST_PRESTAMO_ID = null;
 
     $boxInfoC.classList.remove('hidden');
@@ -280,6 +408,12 @@
     LAST_PRESTAMO_ID = js.id_prestamo || null;
 
     closeModal(document.getElementById('modalPersonal'));
+    if (LAST_PRESTAMO_ID) {
+      const appBase = window.APP_BASE || '/';
+      window.location.href = appBase + 'views/Evaluacion_v.php?id_prestamo=' + encodeURIComponent(LAST_PRESTAMO_ID);
+      return;
+    }
+
     alert(`Préstamo creado: #${js.id_prestamo}\nContrato: ${js.numero_contrato || 'N/A'}`);
     cargarPrestamos(1);
   });
@@ -297,6 +431,12 @@
     LAST_PRESTAMO_ID = js.id_prestamo || null;
 
     closeModal(document.getElementById('modalHipotecario'));
+    if (LAST_PRESTAMO_ID) {
+      const appBase = window.APP_BASE || '/';
+      window.location.href = appBase + 'views/Evaluacion_v.php?id_prestamo=' + encodeURIComponent(LAST_PRESTAMO_ID);
+      return;
+    }
+
     alert(`Préstamo creado: #${js.id_prestamo}\nContrato: ${js.numero_contrato || 'N/A'}`);
     cargarPrestamos(1);
   });
@@ -527,7 +667,8 @@
       page, size: PAGE.size
     });
     const js = await jsonFetch(API, fd);
-    $tblP.innerHTML = (js.data || []).map(r => `
+    $tblP.innerHTML = (js.data || []).map(r => {
+      return `
       <tr>
         <td>${r.id_prestamo}</td>
         <td>${r.nombre} ${r.apellido}</td>
@@ -537,9 +678,12 @@
         <td>${r.plazo_meses} m</td>
         <td>${r.estado_prestamo || '-'}</td>
         <td>${r.proximo_pago || '-'}</td>
-        <td><button class="btn btn-light" data-verp="${r.id_prestamo}">Ver</button></td>
+        <td>
+          <button class="btn btn-light" data-verp="${r.id_prestamo}">Ver</button>
+        </td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
     const total = +js.total || 0, pages = Math.max(1, Math.ceil(total / PAGE.size));
     $pager.innerHTML = Array.from({ length: pages }, (_, i) => `<button ${i + 1 === page ? 'class="active"' : ''} data-p="${i + 1}">${i + 1}</button>`).join('');
   }
@@ -679,7 +823,7 @@
     const btnGarantia = document.getElementById('btnEjecutarGarantia');
     if (btnGarantia) {
       btnGarantia.addEventListener('click', async () => {
-        if (!confirm('Esta seguro de usar la garantia de este prestamo?'));
+        if (!confirm('Esta seguro de usar la garantia de este prestamo?')) return;
 
         const razon = prompt('Por favor ingrese la razón para ejecutar la garantía:');
         if (!razon) return;
@@ -751,7 +895,7 @@
 
     const w = window.open('', '_blank');
     w.document.write('<html><head><title>Cronograma de pagos</title>');
-    w.document.write('<style>@media print { .table-simple { width: 100%; border-collapse: collapse; } .table-simple th, .table-simple td { border; 1px solid #ddd; padding: 8px; text-align: left; } h1 {text-align: center; }}</style>');
+    w.document.write('<style>@media print { .table-simple { width: 100%; border-collapse: collapse; } .table-simple th, .table-simple td { border: 1px solid #ddd; padding: 8px; text-align: left; } h1 {text-align: center; }}</style>');
     w.document.write('</head><body>');
     w.document.write($printArea.innerHTML);
     w.document.write('</body></html>');
