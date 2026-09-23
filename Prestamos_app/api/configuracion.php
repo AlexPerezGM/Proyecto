@@ -66,6 +66,9 @@ try {
     case 'beneficio':
       handleBeneficio($conn, $action);
       break;
+    case 'parametros_cp':
+      handleParametrosCP($conn, $action);
+      break;
     case 'configuracion':
       handleConfiguracion($conn, $action);
       break;
@@ -99,6 +102,11 @@ try {
       break;
     case 'intervalo_decision':
       handleIntervaloDecision($conn, $action);
+      break;
+    case 'catalogos_evaluacion':
+      $riesgos = $conn->query("SELECT id_nivel_riesgo as id, nivel as nombre FROM cat_nivel_riesgo")->fetch_all(MYSQLI_ASSOC);
+      $decisiones = $conn->query("SELECT id_decision_evaluacion as id, nombre_decision as nombre FROM cat_decision_evaluacion")->fetch_all(MYSQLI_ASSOC);
+      ok(['riesgos' => $riesgos, 'decisiones' => $decisiones]);
       break;
     default:
       bad('Módulo no válido');
@@ -550,7 +558,7 @@ function handleTipoPrestamo($conn, $action) {
     case 'list':
       $stmt = $conn->prepare("
         SELECT tp.id_tipo_prestamo, tp.nombre, tp.tasa_interes, tp.monto_minimo, 
-               tp.plazo_minimo_meses, tp.plazo_maximo_meses, ta.tipo_amortizacion
+               tp.plazo_minimo_meses, tp.plazo_maximo_meses, tp.porcentaje_capacidad, ta.tipo_amortizacion
         FROM tipo_prestamo tp 
         LEFT JOIN cat_tipo_amortizacion ta ON tp.id_tipo_amortizacion = ta.id_tipo_amortizacion
         ORDER BY tp.nombre
@@ -572,27 +580,23 @@ function handleTipoPrestamo($conn, $action) {
       $id_tipo_amortizacion = i('id_tipo_amortizacion');
       $plazo_minimo = i('plazo_minimo_meses');
       $plazo_maximo = i('plazo_maximo_meses');
+      $porc_capacidad = fnum_in('porcentaje_capacidad'); 
 
-      if (empty($nombre)) 
-        bad('El nombre del tipo de préstamo es requerido');
-      if ($tasa_interes < 0) 
-        bad('La tasa de interés no puede ser negativa');
-      if ($monto_minimo < 0) 
-        bad('El monto mínimo no puede ser negativo');
-      if ($plazo_minimo <= 0 || $plazo_maximo <= 0) 
-        bad('Los plazos deben ser mayores a 0');
-      if ($plazo_minimo > $plazo_maximo) 
-        bad('El plazo mínimo no puede ser mayor al máximo');
+      if (empty($nombre)) bad('El nombre del tipo de préstamo es requerido');
+      if ($tasa_interes < 0) bad('La tasa de interés no puede ser negativa');
+      if ($monto_minimo < 0) bad('El monto mínimo no puede ser negativo');
+      if ($plazo_minimo <= 0 || $plazo_maximo <= 0) bad('Los plazos deben ser mayores a 0');
+      if ($plazo_minimo > $plazo_maximo) bad('El plazo mínimo no puede ser mayor al máximo');
+      if ($porc_capacidad <= 0 || $porc_capacidad > 100) bad('El porcentaje de capacidad debe ser entre 1 y 100');
+
       if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE tipo_prestamo SET nombre = ?, tasa_interes = ?, monto_minimo = ?, id_tipo_amortizacion = ?, plazo_minimo_meses = ?, plazo_maximo_meses = ? 
-        WHERE id_tipo_prestamo = ?");
-        $stmt->bind_param('sddiiii', $nombre, $tasa_interes, $monto_minimo, $id_tipo_amortizacion, $plazo_minimo, $plazo_maximo, $id);
+        $stmt = $conn->prepare("UPDATE tipo_prestamo SET nombre = ?, tasa_interes = ?, monto_minimo = ?, id_tipo_amortizacion = ?, plazo_minimo_meses = ?, plazo_maximo_meses = ?, porcentaje_capacidad = ? WHERE id_tipo_prestamo = ?");
+        $stmt->bind_param('sddiiidi', $nombre, $tasa_interes, $monto_minimo, $id_tipo_amortizacion, $plazo_minimo, $plazo_maximo, $porc_capacidad, $id);
         $stmt->execute();
-        if ($stmt->affected_rows === 0) 
-          bad('No se encontró el registro a actualizar');
+        // Línea del error 500 ELIMINADA exitosamente
       } else {
-        $stmt = $conn->prepare("INSERT INTO tipo_prestamo (nombre, tasa_interes, monto_minimo, id_tipo_amortizacion, plazo_minimo_meses, plazo_maximo_meses) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param('sddiii', $nombre, $tasa_interes, $monto_minimo, $id_tipo_amortizacion, $plazo_minimo, $plazo_maximo);
+        $stmt = $conn->prepare("INSERT INTO tipo_prestamo (nombre, tasa_interes, monto_minimo, id_tipo_amortizacion, plazo_minimo_meses, plazo_maximo_meses, porcentaje_capacidad) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param('sddiiid', $nombre, $tasa_interes, $monto_minimo, $id_tipo_amortizacion, $plazo_minimo, $plazo_maximo, $porc_capacidad);
         $stmt->execute();
       }
       ok(['message' => 'Tipo de préstamo guardado exitosamente']);
@@ -600,15 +604,10 @@ function handleTipoPrestamo($conn, $action) {
 
     case 'delete':
       $id = i('id');
-      if ($id <= 0) 
-        bad('ID inválido');
-
+      if ($id <= 0) bad('ID inválido');
       $stmt = $conn->prepare("DELETE FROM tipo_prestamo WHERE id_tipo_prestamo = ?");
       $stmt->bind_param('i', $id);
       $stmt->execute();
-      if ($stmt->affected_rows === 0) 
-        bad('No se encontró el registro a eliminar');
-
       ok(['message' => 'Tipo de préstamo eliminado exitosamente']);
       break;
 
@@ -616,7 +615,6 @@ function handleTipoPrestamo($conn, $action) {
       bad('Acción no válida');
   }
 }
-
 function handleAuditoria($conn, $action) {
   switch($action) {
     case 'list':
@@ -1340,7 +1338,7 @@ function handleReglaPuntajeInterno($conn, $action) {
         $catByName = $conn->prepare("SELECT id_categoria_regla FROM cat_categoria_regla_evaluacion WHERE nombre_categoria = ? LIMIT 1");
         $catByName->bind_param('s', $categoriaNombre);
         $catByName->execute();
-        $catByName->bind_result($catIdResolved);
+        $catByName->bind_result($catIdResolved); 
         if ($catByName->fetch()) {
           $idCategoria = (int)$catIdResolved;
         } else {
@@ -1380,6 +1378,56 @@ function handleReglaPuntajeInterno($conn, $action) {
 
     default:
       bad('Acción no válida', 400);
+  }
+}
+
+function handleParametrosCP($conn, $action) {
+  switch ($action) {
+    case 'list':
+      // Ahora leemos de tipo_prestamo, no de la tabla vieja
+      $stmt = $conn->prepare("SELECT id_tipo_prestamo, nombre, cp_permitir_monto, cp_upsell_pct, cp_downsell_pct, cp_permitir_plazo, cp_factor_plazo, cp_permitir_tasa, cp_tasa_minima, cp_permitir_amortizacion FROM tipo_prestamo ORDER BY id_tipo_prestamo ASC");
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $data = [];
+      while ($row = $result->fetch_assoc()) {
+        $data[] = $row;
+      }
+      ok(['data' => $data]);
+      break;
+
+    case 'save':
+      $id = i('id');
+      $p_monto = s('cp_permitir_monto');
+      $upsell = fnum_in('cp_upsell_pct');
+      $downsell = fnum_in('cp_downsell_pct');
+      $p_plazo = s('cp_permitir_plazo');
+      $factor = fnum_in('cp_factor_plazo');
+      $p_tasa = s('cp_permitir_tasa');
+      $tasa_min = fnum_in('cp_tasa_minima');
+      $p_amort = s('cp_permitir_amortizacion');
+
+      if ($id <= 0) bad('ID inválido');
+
+      $stmt = $conn->prepare("UPDATE tipo_prestamo SET 
+        cp_permitir_monto = ?, cp_upsell_pct = ?, cp_downsell_pct = ?, 
+        cp_permitir_plazo = ?, cp_factor_plazo = ?, 
+        cp_permitir_tasa = ?, cp_tasa_minima = ?, 
+        cp_permitir_amortizacion = ? 
+        WHERE id_tipo_prestamo = ?");
+      
+      $stmt->bind_param('sddsdsdsi', 
+        $p_monto, $upsell, $downsell, 
+        $p_plazo, $factor, 
+        $p_tasa, $tasa_min, 
+        $p_amort, $id
+      );
+      $stmt->execute();
+      
+      ok(['message' => 'Límites de Inteligencia Artificial actualizados para este producto.']);
+      break;
+
+    default:
+      bad('Acción no válida');
   }
 }
 

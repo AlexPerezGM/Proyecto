@@ -408,27 +408,34 @@ function saveEvaluationProfileFromRequest($db, $id_cliente, $id_prestamo, array 
       // Ignorar fecha inválida.
     }
   }
-
-  $maxPorcCap = 0.40;
-  [$stCfg, $errCfg] = q(
+// ---- NUEVO: Leer porcentaje de capacidad del TIPO DE PRÉSTAMO ----
+  $maxPorcCap = 0.40; // Fallback por defecto 40%
+  
+  [$stTp, $errTp] = q(
     $db,
-    "SELECT valor_decimal
-     FROM configuracion
-     WHERE nombre_configuracion = 'MAX_PORCENTAJE_CAPACIDAD_PAGO' AND estado = 'Activo'
-     LIMIT 1"
+    "SELECT tp.porcentaje_capacidad 
+     FROM prestamo p 
+     JOIN tipo_prestamo tp ON p.id_tipo_prestamo = tp.id_tipo_prestamo 
+     WHERE p.id_prestamo = ? LIMIT 1",
+    [$id_prestamo],
+    'i'
   );
-  if ($stCfg) {
-    $cfg = $stCfg->get_result()->fetch_assoc();
-    $stCfg->close();
-    $cfgVal = toFloatOrNull($cfg['valor_decimal'] ?? null);
-    if ($cfgVal !== null && $cfgVal > 0) $maxPorcCap = $cfgVal;
+  if ($stTp) {
+    $tp = $stTp->get_result()->fetch_assoc();
+    $stTp->close();
+    if ($tp && isset($tp['porcentaje_capacidad']) && (float)$tp['porcentaje_capacidad'] > 0) {
+      $maxPorcCap = (float)$tp['porcentaje_capacidad'] / 100;
+    }
   }
+  // ------------------------------------------------------------------
 
   $deudaMensualAprox = $deudaTotalFinal > 0 ? ($deudaTotalFinal / 12) : 0.0;
   $capacidadPagoFinal = toFloatOrNull($es['capacidad_pago'] ?? null) ?? 0.0;
   $nivelEndeudamientoFinal = toFloatOrNull($es['nivel_endeudamiento'] ?? null) ?? 0.0;
+  
   if ($ingresosMensuales !== null && $ingresosMensuales > 0) {
     $ingresoNeto = (float)$ingresosMensuales - (float)$gastosFinal;
+    // Ahora usa el porcentaje específico del préstamo en lugar del global
     $capacidadPagoFinal = round(($ingresoNeto * $maxPorcCap) - $deudaMensualAprox, 2);
     $nivelEndeudamientoFinal = round((((float)$gastosFinal + $deudaMensualAprox) / (float)$ingresosMensuales) * 100, 2);
   }
@@ -788,111 +795,85 @@ if ($act==='buscar_cliente'){
   out(['ok'=>true,'data'=>$rows]);
 }
 
-if ($act==='crear_personal'){
-  $id_cliente = (int)$_POST['id_cliente'];
-  $monto_user = (float)($_POST['monto_solicitado'] ?? 0);
-  $tasa       = (float)($_POST['tasa_interes'] ?? 0);
-  $plazo      = (int)($_POST['plazo_meses'] ?? 0);
-  $id_periodo = (int)($_POST['id_periodo_pago'] ?? 0);
-  $id_amortizacion = (int)($_POST['id_tipo_amortizacion'] ?? 1);
-  $id_politica = (int)($_POST['id_politica_cancelacion'] ?? 0);
-  if ($id_politica <= 0) $id_politica = null;
-  $fecha      = trim($_POST['fecha_solicitud'] ?? '') ?: date('Y-m-d');
-  $motivo     = $_POST['motivo'] ?? '';
-  $id_moneda  = (int)($_POST['id_tipo_moneda'] ?? 1);
-  $num_contrato = 'PER-' . date('Ymd') . '-' . str_pad($id_cliente, 4, '0', STR_PAD_LEFT);
-  
-  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || !strtotime($fecha)) {
-    $fecha = date('Y-m-d');
-  }
+if ($act === 'crear_prestamo_dinamico') {
+    $id_cliente = (int)$_POST['id_cliente'];
+    $id_tipo_prestamo = (int)$_POST['id_tipo_prestamo'];
+    $monto_user = (float)($_POST['monto_solicitado'] ?? 0);
+    $tasa       = (float)($_POST['tasa_interes'] ?? 0);
+    $plazo      = (int)($_POST['plazo_meses'] ?? 0);
+    $id_periodo = (int)($_POST['id_periodo_pago'] ?? 0);
+    $id_amortizacion = (int)($_POST['id_tipo_amortizacion'] ?? 1);
+    $id_politica = (int)($_POST['id_politica_cancelacion'] ?? 0);
+    if ($id_politica <= 0) $id_politica = null;
+    $fecha      = trim($_POST['fecha_solicitud'] ?? '') ?: date('Y-m-d');
+    $motivo     = $_POST['motivo'] ?? '';
+    $id_moneda  = (int)($_POST['id_tipo_moneda'] ?? 1);
 
-  $row = $db->query("SELECT tasa_interes, monto_minimo 
-  FROM tipo_prestamo 
-  WHERE id_tipo_prestamo=1")->fetch_assoc();
-  $min = (float)($row['monto_minimo'] ?? 10000);
-  $monto_dop = moneyDOP($db, $monto_user, $id_moneda);
-  if ($monto_dop < $min) 
-    out(['ok'=>false,'msg'=>'Monto menor al mínimo establecido']);
+    // Clave temporal para evitar duplicados en borradores
+    $num_contrato = 'TMP-' . uniqid() . '-' . $id_cliente;
 
-  $db->autocommit(false);
-  try {
-    [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (tasa_interes,id_tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) 
-    VALUES (?,?,?,CURDATE(),1)",
-                  [$tasa,$id_amortizacion,$id_periodo],'dii');
-    if(!$st2) throw new Exception($e2);
-    $id_cond = $db->insert_id;
-    
-    if ($id_politica === null) {
-      [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
-      id_tipo_prestamo,
-      numero_contrato,
-      monto_solicitado,
-      fecha_solicitud,
-      plazo_meses,
-      id_estado_prestamo,
-      id_condicion_actual,
-      creado_por)
-      VALUES (?,?,?,?,?,?,2,?,1)",
-                    [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond],'iisdsii');
-    } else {
-      [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente,
-      id_tipo_prestamo,
-      numero_contrato,
-      monto_solicitado,
-      fecha_solicitud,
-      plazo_meses,
-      id_estado_prestamo,
-      id_condicion_actual,
-      id_politica_cancelacion,
-      creado_por)
-      VALUES (?,?,?,?,?,?,2,?,?,1)",
-                    [$id_cliente,1,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond,$id_politica],'iisdsiii');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || !strtotime($fecha)) {
+        $fecha = date('Y-m-d');
     }
-    if(!$st) throw new Exception($err);
-   
-    $id_p = $db->insert_id;
-    
-    q($db, "INSERT INTO prestamo_personal (id_prestamo,motivo) 
-    VALUES (?,?)", [$id_p,$motivo], 'is');
 
-    saveEvaluationProfileFromRequest($db, $id_cliente, $id_p, $_POST);
+    // Validar mínimo contra la base de datos
+    $row = $db->query("SELECT tasa_interes, monto_minimo FROM tipo_prestamo WHERE id_tipo_prestamo = $id_tipo_prestamo")->fetch_assoc();
+    $min = (float)($row['monto_minimo'] ?? 1000);
+    $monto_dop = moneyDOP($db, $monto_user, $id_moneda);
 
-    list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
-    if (!$ok) 
-      throw new Exception("Error al generar el cronograma: " . $e_cronograma);
-    
-    $tipo_garantia = $_POST['tipo_garantia'] ?? '';
-    $descripcion = $_POST['descripcion_garantia'] ?? 'Garantia Personal';
-    $valor_estimado = $monto_dop;
-
-    if (!empty($tipo_garantia)){
-      [$st_g, $err_g] = q($db, "INSERT INTO garantia (id_prestamo, id_cliente, descripcion, valor) 
-      VALUES (?,?,?,?)",
-      [$id_p, $id_cliente, $descripcion, $valor_estimado], 'iisd');
-
-      if (!$st_g) throw new Exception("Error al guardar la garantia:". $err_g);
-      $id_garantia = $db->insert_id;
-
-      $res_tipo = $db->query("SELECT id_tipo_garantia 
-      FROM cat_tipo_garantia 
-      WHERE tipo_garantia = '" . $db->real_escape_string($tipo_garantia) . "' LIMIT 1");
-      $row_tipo = $res_tipo->fetch_assoc();
-      $id_tipo_g = $row_tipo ? $row_tipo['id_tipo_garantia'] : 1;
-
-      [$st_dg, $err_dg] = q($db, "INSERT INTO detalle_garantia (id_garantia, id_tipo_garantia, descripcion, valor_estimado, estado_garantia)
-      VALUES (?,?,?,?, 'Activa')",
-      [$id_garantia, $id_tipo_g, $descripcion, $valor_estimado], 'iisd');
-
-      if (!$st_dg) throw new Exception("Error en detalle garantia:". $err_dg);      
+    if ($monto_dop < $min) {
+        out(['ok'=>false,'msg'=>'El monto es menor al mínimo establecido para este producto (RD$ '.number_format($min,2).')']);
     }
-    $db->commit();
-    out(['ok'=>true,'id_prestamo'=>$id_p,'numero_contrato'=>$num_contrato]);
-  } catch (Exception $e) {
-    $db->rollback();
-    out(['ok'=>false,'msg'=>$e->getMessage()]);
-  } finally {
-    $db->autocommit(true);
-  }
+
+    $db->autocommit(false);
+    try {
+        [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (tasa_interes,id_tipo_amortizacion,id_periodo_pago,vigente_desde,esta_activo) VALUES (?,?,?,CURDATE(),1)", [$tasa,$id_amortizacion,$id_periodo],'dii');
+        if(!$st2) throw new Exception($e2);
+        $id_cond = $db->insert_id;
+
+        if ($id_politica === null) {
+            [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente, id_tipo_prestamo, numero_contrato, monto_solicitado, fecha_solicitud, plazo_meses, id_estado_prestamo, id_condicion_actual, creado_por) VALUES (?,?,?,?,?,?,2,?,1)", [$id_cliente,$id_tipo_prestamo,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond],'iisdsii');
+        } else {
+            [$st,$err] = q($db, "INSERT INTO prestamo (id_cliente, id_tipo_prestamo, numero_contrato, monto_solicitado, fecha_solicitud, plazo_meses, id_estado_prestamo, id_condicion_actual, id_politica_cancelacion, creado_por) VALUES (?,?,?,?,?,?,2,?,?,1)", [$id_cliente,$id_tipo_prestamo,$num_contrato,$monto_dop,$fecha,$plazo,$id_cond,$id_politica],'iisdsiii');
+        }
+        if(!$st) throw new Exception($err);
+        $id_p = $db->insert_id;
+
+        // Inserción en detalle (como el "motivo" aplica para todos, usamos prestamo_personal como fallback generico de detalle si no hay tabla específica)
+        q($db, "INSERT INTO prestamo_personal (id_prestamo,motivo) VALUES (?,?)", [$id_p,$motivo], 'is');
+
+        // Insertar métricas en Evaluacion Estratégica
+        saveEvaluationProfileFromRequest($db, $id_cliente, $id_p, $_POST);
+
+        list($ok, $e_cronograma) = generar_cronograma_prestamo($db, $id_p, $fecha);
+        if (!$ok) throw new Exception("Error al generar el cronograma temporal: " . $e_cronograma);
+
+        // Garantía opcional universal
+        $tipo_garantia = $_POST['tipo_garantia'] ?? '';
+        $descripcion = $_POST['descripcion_garantia'] ?? 'Garantía del Préstamo';
+        $valor_estimado = (float)($_POST['valor_garantia'] ?? $monto_dop);
+
+        if (!empty($tipo_garantia)){
+            [$st_g, $err_g] = q($db, "INSERT INTO garantia (id_prestamo, id_cliente, descripcion, valor) VALUES (?,?,?,?)", [$id_p, $id_cliente, $descripcion, $valor_estimado], 'iisd');
+            if (!$st_g) throw new Exception("Error al guardar la garantía: ". $err_g);
+            $id_garantia = $db->insert_id;
+
+            $res_tipo = $db->query("SELECT id_tipo_garantia FROM cat_tipo_garantia WHERE id_tipo_garantia = " . (int)$tipo_garantia);
+            $row_tipo = $res_tipo->fetch_assoc();
+            $id_tipo_g = $row_tipo ? $row_tipo['id_tipo_garantia'] : 1;
+
+            [$st_dg, $err_dg] = q($db, "INSERT INTO detalle_garantia (id_garantia, id_tipo_garantia, descripcion, valor_estimado, estado_garantia) VALUES (?,?,?,?, 'Activa')", [$id_garantia, $id_tipo_g, $descripcion, $valor_estimado], 'iisd');
+            if (!$st_dg) throw new Exception("Error en detalle garantía: ". $err_dg);
+        }
+
+        $db->commit();
+        out(['ok'=>true, 'id_prestamo'=>$id_p, 'numero_contrato'=>$num_contrato]);
+    } catch (Exception $e) {
+        $db->rollback();
+        out(['ok'=>false, 'msg'=>$e->getMessage()]);
+    } finally {
+        $db->autocommit(true);
+    }
 }
 
 if ($act==='crear_hipotecario'){
@@ -909,7 +890,8 @@ if ($act==='crear_hipotecario'){
   $valor      = (float)($_POST['valor_propiedad'] ?? 0);
   $porc       = (float)($_POST['porcentaje_financiamiento'] ?? 0);
   $id_moneda  = (int)($_POST['id_tipo_moneda'] ?? 1);
-  $num_contrato = 'HIP-' . date('Ymd') . '-' . str_pad($id_cliente, 4, '0', STR_PAD_LEFT);
+  // Generamos un identificador temporal único para que la base de datos no choque
+  $num_contrato = 'TMP-' . uniqid() . '-' . $id_cliente;
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || !strtotime($fecha)) {
     $fecha = date('Y-m-d');
   }
@@ -920,15 +902,10 @@ if ($act==='crear_hipotecario'){
   $monto_dop = moneyDOP($db, $monto_user, $id_moneda);
   $valor_dop = moneyDOP($db, $valor, $id_moneda);
 
-  if ($monto_dop < $min) out(['ok'=>false,'msg'=>'Monto menor al mínimo establecido']);
   $porc_calc = $valor_dop > 0 ? ($monto_dop / $valor_dop) * 100 : 0;
-  if ($porc_calc > 80.01) 
-    out(['ok'=>false,'msg'=>'El porcentaje financiado no puede exceder 80%']);
-  if ($porc > 0) { 
-    $porc = round(min($porc, $porc_calc), 2); 
-  } else { 
-    $porc = round($porc_calc, 2); 
-  }
+  // Eliminamos los bloqueos de monto y porcentaje máximo.
+  // Dejamos que se guarde exactamente lo que el operador pidió.
+  $porc = round($porc_calc, 2);
   $db->autocommit(false);
   try {
     [$st2,$e2] = q($db, "INSERT INTO condicion_prestamo (tasa_interes,

@@ -1007,41 +1007,35 @@ if ($action === 'confirmar_contrapropuesta') {
     if (!$seleccionada) {
         json_err('Contrapropuesta no encontrada', 404);
     }
-
+    
     $estado_eval = estado_id($conn, 'En evaluacion', 2);
+    $sqlInfo = "SELECT id_cliente, id_tipo_prestamo FROM prestamo WHERE id_prestamo = " . $id_prestamo;
+    $resInfo = $conn->query($sqlInfo)->fetch_assoc();
+    $prefijo = ($resInfo['id_tipo_prestamo'] == 2) ? 'HIP-' : 'PER-';
+    $nuevo_contrato = $prefijo . date('Ymd-Hi') . '-' . str_pad($resInfo['id_cliente'], 4, '0', STR_PAD_LEFT);
 
     $conn->begin_transaction();
     try {
+        // Generar las nuevas condiciones vinculadas al préstamo si se alteraron
+        $stmt_cond = $conn->prepare("INSERT INTO condicion_prestamo (tasa_interes, id_tipo_amortizacion, id_periodo_pago, vigente_desde, esta_activo) VALUES (?, ?, ?, CURDATE(), 1)");
+        $stmt_cond->bind_param('dii', $seleccionada['tasa'], $seleccionada['amortizacion'], $seleccionada['periodo']);
+        $stmt_cond->execute();
+        $id_nueva_condicion = $conn->insert_id;
+
         exec_stmt(
             $conn,
-            'UPDATE prestamo SET monto_solicitado = ?, plazo_meses = ?, id_estado_prestamo = ? WHERE id_prestamo = ?',
-            'diii',
-            [(float)$seleccionada['monto'], (int)$seleccionada['plazo'], $estado_eval, $id_prestamo]
+            'UPDATE prestamo SET monto_solicitado = ?, plazo_meses = ?, id_estado_prestamo = ?, numero_contrato = ?, id_condicion_actual = ? WHERE id_prestamo = ?',
+            'diisii',
+            [(float)$seleccionada['monto'], (int)$seleccionada['plazo'], $estado_eval, $nuevo_contrato, $id_nueva_condicion, $id_prestamo]
         );
 
         if (!empty($seleccionada['id_contrapropuesta'])) {
-            exec_stmt(
-                $conn,
-                'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Aceptada" WHERE id_contrapropuesta = ? AND id_prestamo = ?',
-                'ii',
-                [(int)$seleccionada['id_contrapropuesta'], $id_prestamo]
-            );
-            exec_stmt(
-                $conn,
-                'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Rechazada" WHERE id_prestamo = ? AND estado_contrapropuesta = "Pendiente" AND id_contrapropuesta <> ?',
-                'ii',
-                [$id_prestamo, (int)$seleccionada['id_contrapropuesta']]
-            );
-        } else {
-            exec_stmt(
-                $conn,
-                'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Aceptada" WHERE id_prestamo = ? AND estado_contrapropuesta = "Pendiente"',
-                'i',
-                [$id_prestamo]
-            );
+            exec_stmt($conn, 'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Aceptada" WHERE id_contrapropuesta = ? AND id_prestamo = ?', 'ii', [(int)$seleccionada['id_contrapropuesta'], $id_prestamo]);
+            exec_stmt($conn, 'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Rechazada" WHERE id_prestamo = ? AND estado_contrapropuesta = "Pendiente"', 'i', [$id_prestamo]);
         }
 
         $conn->commit();
+
     } catch (Throwable $e) {
         $conn->rollback();
         json_err('Error al confirmar contrapropuesta: ' . $e->getMessage(), 500);
@@ -1055,112 +1049,72 @@ if ($action === 'confirmar_contrapropuesta') {
     ]);
 }
 
+if ($action === 'confirmar_original') {
+    $id_prestamo = (int)input('id_prestamo', 0);
+    if ($id_prestamo <= 0) json_err('id_prestamo requerido');
+
+    $estado_eval = estado_id($conn, 'En evaluacion', 2);
+
+    // GENERAR EL NÚMERO DE CONTRATO FINAL CON HORA Y MINUTOS
+    $sqlInfo = "SELECT id_cliente, id_tipo_prestamo FROM prestamo WHERE id_prestamo = " . $id_prestamo;
+    $resInfo = $conn->query($sqlInfo)->fetch_assoc();
+    $prefijo = ($resInfo['id_tipo_prestamo'] == 2) ? 'HIP-' : 'PER-';
+    $nuevo_contrato = $prefijo . date('Ymd-Hi') . '-' . str_pad($resInfo['id_cliente'], 4, '0', STR_PAD_LEFT);
+
+    $conn->begin_transaction();
+    try {
+        // En la original no tocamos ni monto ni plazo, solo cambiamos PENDIENTE por el contrato real
+        exec_stmt(
+            $conn,
+            'UPDATE prestamo SET id_estado_prestamo = ?, numero_contrato = ? WHERE id_prestamo = ?',
+            'isi',
+            [$estado_eval, $nuevo_contrato, $id_prestamo]
+        );
+        $conn->commit();
+    } catch (Throwable $e) {
+        $conn->rollback();
+        json_err('Error al confirmar original: ' . $e->getMessage(), 500);
+    }
+
+    unset($_SESSION['contrapropuestas'][$id_prestamo]);
+    json_ok(['mensaje' => 'Solicitud original confirmada y enviada a revisión.']);
+}
+
 if ($action === 'rechazar_contrapropuesta') {
     $id_prestamo = (int)input('id_prestamo', 0);
     if ($id_prestamo <= 0) {
         json_err('id_prestamo requerido');
     }
 
-    $estado_rechazo = estado_id($conn, 'Rechazado', 4);
-
     $conn->begin_transaction();
     try {
-        exec_stmt(
-            $conn,
-            'UPDATE prestamo SET id_estado_prestamo = ? WHERE id_prestamo = ?',
-            'ii',
-            [$estado_rechazo, $id_prestamo]
-        );
+        // Como el cliente rechazó la oferta y el contrato era temporal ('PENDIENTE'), borramos todo el rastro.
+        
+        // 1. Borrar de tablas secundarias (evaluaciones y cronogramas)
+        exec_stmt($conn, 'DELETE FROM evaluacion_estrategica WHERE id_prestamo = ?', 'i', [$id_prestamo]);
+        exec_stmt($conn, 'DELETE FROM evaluacion_prestamo WHERE id_prestamo = ?', 'i', [$id_prestamo]);
+        exec_stmt($conn, 'DELETE FROM contrapropuesta_prestamo WHERE id_prestamo = ?', 'i', [$id_prestamo]);
+        exec_stmt($conn, 'DELETE FROM cronograma_cuota WHERE id_prestamo = ?', 'i', [$id_prestamo]);
+        
+        // 2. Borrar garantías asociadas a esa pre-solicitud
+        $resGar = $conn->query("SELECT id_garantia FROM garantia WHERE id_prestamo = " . $id_prestamo);
+        if ($resGar && $gar = $resGar->fetch_assoc()) {
+            exec_stmt($conn, 'DELETE FROM detalle_garantia WHERE id_garantia = ?', 'i', [$gar['id_garantia']]);
+            exec_stmt($conn, 'DELETE FROM garantia WHERE id_garantia = ?', 'i', [$gar['id_garantia']]);
+        }
 
-        exec_stmt(
-            $conn,
-            'UPDATE evaluacion_prestamo SET estado_evaluacion = "Rechazado" WHERE id_evaluacion_prestamo = (SELECT t.id_evaluacion_prestamo FROM (SELECT id_evaluacion_prestamo FROM evaluacion_prestamo WHERE id_prestamo = ? ORDER BY id_evaluacion_prestamo DESC LIMIT 1) t)',
-            'i',
-            [$id_prestamo]
-        );
-
-        exec_stmt(
-            $conn,
-            'UPDATE contrapropuesta_prestamo SET estado_contrapropuesta = "Rechazada" WHERE id_prestamo = ? AND estado_contrapropuesta = "Pendiente"',
-            'i',
-            [$id_prestamo]
-        );
+        // 3. Finalmente, borrar la pre-solicitud de la tabla prestamo
+        exec_stmt($conn, 'DELETE FROM prestamo WHERE id_prestamo = ?', 'i', [$id_prestamo]);
 
         $conn->commit();
     } catch (Throwable $e) {
         $conn->rollback();
-        json_err('Error al rechazar contrapropuesta: ' . $e->getMessage(), 500);
+        json_err('Error al limpiar la solicitud: ' . $e->getMessage(), 500);
     }
 
     unset($_SESSION['contrapropuestas'][$id_prestamo]);
-    json_ok(['mensaje' => 'El cliente rechazo las contrapropuestas. Prestamo marcado como rechazado.']);
+    json_ok(['mensaje' => 'Operación cancelada. El registro temporal ha sido eliminado del sistema.']);
 }
+
+// Cierre de seguridad por si envían una acción no válida
 json_err('Accion no reconocida: ' . $action);
-
-function config_int(mysqli $conn, $nombre, $fallback = 0){
-    return (int)round(config_decimal($conn, $nombre, $fallback));
-}
-
-function obtener_nivel_riesgo(mysqli $conn, int $puntaje): array{
-    $sql = "
-        SELECT nr.id_nivel_riesgo, nr.nivel
-        FROM configuracion_intervalo_riesgo cir
-        INNER JOIN cat_nivel_riesgo nr ON nr.id_nivel_riesgo = cir.id_nivel_riesgo
-        WHERE cir.estado = 'Activo' AND (cir.vigente_hasta IS NULL OR cir.vigente_hasta >= CURDATE())
-            AND cir.vigente_desde <= CURDATE() AND ? BETWEEN cir.puntaje_minimo AND cir.puntaje_maximo
-            ORDER BY cir.prioridad ASC, cir.id_intervalo_riesgo ASC LIMIT 1
-    ";
-    $row = fetch_one($conn, $sql, 'i', [$puntaje]);
-    if ($row) {
-        return [
-            'id_nivel_riesgo' => (int)$row['id_nivel_riesgo'],
-            'nivel' => $row['nivel'],
-        ];
-    }
-
-    $sqlFallbackIntervalo = "
-        SELECT nr.id_nivel_riesgo, nr.nivel
-        FROM configuracion_intervalo_riesgo cir
-        INNER JOIN cat_nivel_riesgo nr ON nr.id_nivel_riesgo = cir.id_nivel_riesgo
-        WHERE cir.estado = 'Activo'
-            AND (cir.vigente_hasta IS NULL OR cir.vigente_hasta >= CURDATE())
-            AND cir.vigente_desde <= CURDATE()
-        ORDER BY
-            CASE
-                WHEN ? < cir.puntaje_minimo THEN cir.puntaje_minimo - ?
-                WHEN ? > cir.puntaje_maximo THEN ? - cir.puntaje_maximo
-                ELSE 0
-            END ASC,
-            cir.prioridad ASC,
-            cir.id_intervalo_riesgo ASC
-        LIMIT 1
-    ";
-    $fallback = fetch_one($conn, $sqlFallbackIntervalo, 'iiii', [$puntaje, $puntaje, $puntaje, $puntaje]);
-
-    if (!$fallback) {
-        $fallback = fetch_one($conn, "SELECT id_nivel_riesgo, nivel FROM cat_nivel_riesgo ORDER BY id_nivel_riesgo ASC LIMIT 1");
-    }
-
-    return [
-        'id_nivel_riesgo' => (int)($fallback['id_nivel_riesgo'] ?? 0),
-        'nivel' => (string)($fallback['nivel'] ?? 'Desconocido'),
-    ];
-}
-
-function obtener_decision(mysqli $conn, int $puntaje): string{
-    $sql = "
-        SELECT cde.codigo_decision
-        FROM configuracion_intervalo_decision cid
-        INNER JOIN cat_decision_evaluacion cde ON cde.id_decision_evaluacion = cid.id_decision_evaluacion
-        WHERE cid.estado = 'Activo' 
-            AND cde.estado = 'Activo'
-            AND (cid.vigente_hasta IS NULL OR cid.vigente_hasta >= CURDATE())
-            AND cid.vigente_desde <= CURDATE()
-            AND ? BETWEEN cid.puntaje_minimo AND cid.puntaje_maximo
-            ORDER BY cid.prioridad ASC, cid.id_intervalo_decision ASC LIMIT 1";
-    $row = fetch_one($conn, $sql, 'i', [$puntaje]);
-    if (!$row || empty($row['codigo_decision'])){
-        return 'REVISION_MANUAL';
-    }
-    return (string)$row['codigo_decision'];
-}

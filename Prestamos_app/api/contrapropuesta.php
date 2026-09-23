@@ -38,7 +38,7 @@ if (!function_exists('obtener_contrapropuestas_para_prestamo')) {
                 ) ie2 ON ie2.id_cliente = ie1.id_cliente AND ie2.max_id = ie1.id_ingresos_egresos
             ) ie ON ie.id_cliente = p.id_cliente
             LEFT JOIN (
-                SELECT ep1.id_prestamo, ep1.capacidad_pago
+                SELECT ep1.id_prestamo, ep1.capacidad_pago, ep1.estado_evaluacion
                 FROM evaluacion_prestamo ep1
                 INNER JOIN (
                     SELECT id_prestamo, MAX(id_evaluacion_prestamo) AS max_id
@@ -63,11 +63,6 @@ if (!function_exists('obtener_contrapropuestas_para_prestamo')) {
             return null;
         }
 
-        $estadoEvaluacionActual = trim((string)($prestamo['estado_evaluacion_actual'] ?? ''));
-        if (strcasecmp($estadoEvaluacionActual, 'Contrapropuesta') !== 0) {
-            return null;
-        }
-
         $tasaAnual = (float)($prestamo['tasa_interes'] ?? 0);
         $tasaMensual = ($tasaAnual / 100) / 12;
 
@@ -80,27 +75,23 @@ if (!function_exists('obtener_contrapropuestas_para_prestamo')) {
         } else {
             $cuotaOrig = $montoOrig / $plazoOrig;
         }
-
+// ... (resto del archivo superior) ...
         $capDisponible = (float)($prestamo['capacidad_pago'] ?? 0);
 
-        $stmtCp = $conn->prepare(
-            "
-            SELECT id_contrapropuesta, monto_sugerido, plazo_sugerido, estado_contrapropuesta
+        // EXTRAER TODAS LAS DIMENSIONES
+        $stmtCp = $conn->prepare("
+            SELECT id_contrapropuesta, monto_sugerido, plazo_sugerido, tasa_sugerida, id_periodo_sugerido, id_amortizacion_sugerida, descripcion_estrategia, estado_contrapropuesta
             FROM contrapropuesta_prestamo
-            WHERE id_prestamo = ?
-              AND estado_contrapropuesta = 'Pendiente'
+            WHERE id_prestamo = ? AND estado_contrapropuesta = 'Pendiente'
             ORDER BY id_contrapropuesta ASC
-            "
-        );
+        ");
 
         $opciones = [];
         if ($stmtCp) {
             $stmtCp->bind_param('i', $id_prestamo);
             $stmtCp->execute();
             $res = $stmtCp->get_result();
-            while ($r = $res->fetch_assoc()) {
-                $opciones[] = $r;
-            }
+            while ($r = $res->fetch_assoc()) { $opciones[] = $r; }
             $stmtCp->close();
         }
 
@@ -109,10 +100,11 @@ if (!function_exists('obtener_contrapropuestas_para_prestamo')) {
             foreach ($opciones as $i => $cp) {
                 $monto = (float)$cp['monto_sugerido'];
                 $plazo = max(1, (int)$cp['plazo_sugerido']);
+                $tasa = isset($cp['tasa_sugerida']) ? (float)$cp['tasa_sugerida'] : $tasaAnual;
+                $tasaMensual = ($tasa / 100) / 12;
+
                 if ($tasaMensual > 0) {
-                    $pow = pow(1 + $tasaMensual, $plazo);
-                    $den = ($pow - 1);
-                    $cuota = $den == 0 ? ($monto / $plazo) : $monto * (($tasaMensual * $pow) / $den);
+                    $cuota = $monto * (($tasaMensual * pow(1 + $tasaMensual, $plazo)) / (pow(1 + $tasaMensual, $plazo) - 1));
                 } else {
                     $cuota = $monto / $plazo;
                 }
@@ -122,34 +114,24 @@ if (!function_exists('obtener_contrapropuestas_para_prestamo')) {
                     'id_contrapropuesta' => (int)$cp['id_contrapropuesta'],
                     'monto' => $monto,
                     'plazo' => $plazo,
+                    'tasa' => $tasa,
+                    'periodo' => $cp['id_periodo_sugerido'],
+                    'amortizacion' => $cp['id_amortizacion_sugerida'],
+                    'descripcion' => $cp['descripcion_estrategia'],
                     'cuota' => round($cuota, 2),
-                    'tasa' => $tasaAnual,
                     'total_pagar' => round($cuota * $plazo, 2)
                 ];
             }
-        } else {
-            $sessionCps = $_SESSION['contrapropuestas'][$id_prestamo] ?? [];
-            foreach ($sessionCps as $i => $cp) {
-                $lista[] = [
-                    'opcion' => isset($cp['opcion']) ? (int)$cp['opcion'] : ($i + 1),
-                    'id_contrapropuesta' => null,
-                    'monto' => (float)($cp['monto'] ?? 0),
-                    'plazo' => (int)($cp['plazo'] ?? 0),
-                    'cuota' => (float)($cp['cuota'] ?? 0),
-                    'tasa' => (float)($cp['tasa'] ?? $tasaAnual),
-                    'total_pagar' => (float)($cp['total_pagar'] ?? 0)
-                ];
-            }
         }
-
+        
         return [
             'prestamo' => $prestamo,
             'contrapropuestas' => $lista,
             'monto_orig' => $montoOrig,
             'plazo_orig' => $plazoOrig,
             'cuota_orig' => $cuotaOrig,
-            'cap_disponible' => $capDisponible,
-            'tasa_anual' => $tasaAnual,
+            'tasa_anual_orig' => $tasaAnual, // Pasamos la original a la vista
+            'cap_disponible' => $capDisponible
         ];
     }
 }

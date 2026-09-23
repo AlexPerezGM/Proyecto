@@ -2,21 +2,54 @@
 @ini_set('display_errors', '0');
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../config/db.php';
+
 $cedula = $_GET['cedula'] ?? null;
+$id_cliente = (int)($_GET['id_cliente'] ?? 0);
 
 if(!$cedula){
     echo json_encode(["ok"=>false,"msg"=>"Falta cédula"]);
     exit;
 }
 
+// 1. BUSCAR EL SCORE REAL EN LA BASE DE DATOS USANDO EL ID EXACTO
+$score_real = null;
+$nivel_real = null;
+
+if (isset($conn) && $conn instanceof mysqli && $id_cliente > 0) {
+    $sql = "SELECT pc.puntaje, nr.nivel 
+            FROM puntaje_crediticio pc
+            LEFT JOIN cat_nivel_riesgo nr ON pc.id_nivel_riesgo = nr.id_nivel_riesgo
+            WHERE pc.id_cliente = ?
+            ORDER BY pc.id_puntaje_crediticio DESC LIMIT 1";
+    
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('i', $id_cliente);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        if ($res && (int)$res['puntaje'] > 0) {
+            $score_real = (int)$res['puntaje'];
+            $nivel_real = $res['nivel'] ? substr($res['nivel'], 0, 1) : null; 
+        }
+        $stmt->close();
+    }
+}
+
+// 2. GENERACIÓN ALEATORIA (Si no hay score real)
 srand(intval(substr($cedula, -4)));
 
-$score = rand(300, 900);
+// USA EL SCORE REAL SI EXISTE, SI NO, INVENTA UNO
+$score = $score_real !== null ? $score_real : rand(300, 900);
 
-if     ($score >= 780) $nivel = "A"; 
-elseif ($score >= 680) $nivel = "B";
-elseif ($score >= 580) $nivel = "C";
-else                   $nivel = "D";
+if ($nivel_real !== null) {
+    $nivel = $nivel_real;
+} else {
+    if     ($score >= 780) $nivel = "A"; 
+    elseif ($score >= 680) $nivel = "B";
+    elseif ($score >= 580) $nivel = "C";
+    else                   $nivel = "D";
+}
 
 if ($nivel === "A") {
     $riesgo_txt = "Riesgo muy bajo";
@@ -29,7 +62,6 @@ if ($nivel === "A") {
 }
 
 $cantidad_tarjetas = rand(0, 4);
-$tarjetas = [];
 $tarjetas_detalle = [];
 $total_limite_tc = 0;
 $total_balance_tc = 0;
@@ -54,14 +86,13 @@ for ($i=0; $i < $cantidad_tarjetas; $i++){
 $utilizacion_total = ($total_limite_tc > 0) ? round(($total_balance_tc / $total_limite_tc)*100,2):0;
 
 $cantidad_prestamos = rand(0, 5);
-$prestamos = [];
 $prestamos_detalle = [];
 $cuota_mensual_total = 0;
 
 for ($i=0; $i < $cantidad_prestamos; $i++){
     $monto_original = rand(50000, 1000000);
     $balance_pendiente = rand(0, $monto_original);
-    $cuota = $monto_original *0.03;
+    $cuota = $monto_original * 0.03;
     $cuota_mensual_total += $cuota;
 
     $prestamos_detalle[] = [
@@ -77,7 +108,7 @@ $hist24 = [];
 for($i=1;$i<=24;$i++){
     $hist24[] = [
         "mes" => date("Y-m", strtotime("-$i month")),
-        "dias_mora" => ($nivel == "A") ? 0 : rand(0, 45)
+        "dias_mora" => ($nivel == "A" || $nivel == "B") ? 0 : rand(0, 45)
     ];
 }
 
@@ -87,16 +118,15 @@ foreach ($hist24 as $h) {
 }
 
 $consultas = rand(0, 5);
+$alertas = [];
+if($atraso_max > 30) $alertas[] = "Retrasos significativos en los últimos 12 meses";
+if(($cantidad_prestamos + $cantidad_tarjetas) > 6) $alertas[] = "Alto nivel de endeudamiento";
+if($consultas > 5) $alertas[] = "Consultas frecuentes recientes";
+if(rand(0,10) > 8) $alertas[] = "Cuenta reportada en disputa";
+if($utilizacion_total > 70) $alertas[] = "Porcentaje de uso muy alto en tarjetas de credito";
+if($cuota_mensual_total > 500000) $alertas[] = "Cuota mensual total elevada en relación al ingreso estimado";
 
- $alertas = [];
- if($atraso_max > 30) $alertas[] = "Retrasos significativos en los últimos 12 meses";
- if(($cantidad_prestamos + $cantidad_tarjetas) > 6) $alertas[] = "Alto nivel de endeudamiento";
- if($consultas > 5) $alertas[] = "Consultas frecuentes recientes";
- if(rand(0,10) > 8) $alertas[] = "Cuenta reportada en disputa";
- if($utilizacion_total > 70) $alertas[] = "Porcentaje de uso muy alto en tarjetas de credito";
- if($cuota_mensual_total > 500000) $alertas[] = "Cuota mensual total elevada en relación al ingreso estimado";
-
-$response = [
+echo json_encode([
     "ok" => true,
     "data" => [
         "identificacion" => [
@@ -115,13 +145,11 @@ $response = [
             "consultas_ultimo_mes" => rand(0, 5)
         ],
         "detalle_cuentas" => [
-            "tarjetas" => $tarjetas_detalle ?? [],
-            "prestamos" => $prestamos_detalle ?? []
+            "tarjetas" => $tarjetas_detalle,
+            "prestamos" => $prestamos_detalle
         ],
         "historial_24_meses" => $hist24,
         "alertas" => $alertas,
-        "fuente" => "Simulación de Buró de Crédito"
+        "fuente" => $score_real !== null ? "Base de Datos Local (Override)" : "Simulación de Buró de Crédito"
     ]
-];
-
-echo json_encode($response);
+]);
