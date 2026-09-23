@@ -2412,3 +2412,321 @@ SET @id_rol := LAST_INSERT_ID();
 
 INSERT INTO usuarios_roles (id_usuario, id_rol)
 VALUES (@id_usuario, @id_rol);
+
+-- Improtante tablas nuevas del proyecto de automatizacion de prestamos
+-- 1. Crear la tabla evaluacion_estrategica
+CREATE TABLE IF NOT EXISTS evaluacion_estrategica (
+    id_evaluacion_estrategica INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    id_prestamo INT NOT NULL,
+    salario_neto DECIMAL(14,2) NOT NULL DEFAULT 0,
+    tipo_ingreso ENUM('fijo', 'Variable') NOT NULL DEFAULT 'fijo',
+    empresa_laboral VARCHAR(255) NOT NULL DEFAULT 'N/D',
+    antiguedad_empleado INT NOT NULL DEFAULT 0,
+    id_sector_economico INT NOT NULL DEFAULT 1,
+    puntaje_crediticio INT NOT NULL DEFAULT 0,
+    cantidad_tarjetas_activas INT NOT NULL DEFAULT 0,
+    porcentaje_utilizacion_credito DECIMAL(5,2) NOT NULL DEFAULT 0,
+    total_deudas_externas DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_gastos_fijos DECIMAL(14,2) DEFAULT 0,
+    capacidad_pago DECIMAL(14,2) DEFAULT 0,
+    nivel_endeudamiento DECIMAL(5,2) DEFAULT 0,
+    id_tipo_vivienda INT NOT NULL DEFAULT 1,
+    cantidad_dependientes INT NOT NULL DEFAULT 0,
+    edad_al_finalizar INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_eval_cliente FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
+    CONSTRAINT fk_eval_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
+) ENGINE = INNODB;
+
+-- 2. Crear la tabla contrapropuesta_prestamo (por si no la tienes creada aún)
+CREATE TABLE IF NOT EXISTS contrapropuesta_prestamo (
+    id_contrapropuesta INT AUTO_INCREMENT PRIMARY KEY,
+    id_prestamo INT NOT NULL,
+    monto_sugerido DECIMAL(14,2) NOT NULL,
+    plazo_sugerido INT NOT NULL,
+    estado_contrapropuesta ENUM('Pendiente', 'Aceptada', 'Rechazada') DEFAULT 'Pendiente',
+    fecha_contrapropuesta DATE NOT NULL,
+    CONSTRAINT fk_contrapropuesta_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
+) ENGINE = INNODB;
+
+-- corregir la tabla cliente para agregar la columna fecha_registro
+ALTER TABLE cliente 
+ADD COLUMN fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP;
+
+-- 1. Crear el catálogo de Sector Económico (necesario para el perfil del cliente)
+CREATE TABLE IF NOT EXISTS cat_sector_economico (
+    id_sector_economico INT AUTO_INCREMENT PRIMARY KEY,
+    sector VARCHAR(100) NOT NULL,
+    nivel_riesgo ENUM('Bajo','Medio', 'Alto') DEFAULT 'Medio'
+) ENGINE = INNODB;
+
+-- Insertar valores por defecto para el sector económico
+INSERT IGNORE INTO cat_sector_economico (id_sector_economico, sector, nivel_riesgo) VALUES
+(1, 'Público', 'Bajo'),
+(2, 'Privado', 'Medio'),
+(3, 'Independiente', 'Alto'),
+(4, 'Otro', 'Medio');
+
+-- 2. Crear el catálogo de Tipo de Vivienda (necesario para el perfil del cliente)
+CREATE TABLE IF NOT EXISTS cat_tipo_vivienda (
+    id_tipo_vivienda INT AUTO_INCREMENT PRIMARY KEY,
+    tipo_vivienda VARCHAR(100) NOT NULL
+) ENGINE = INNODB;
+
+-- Insertar valores por defecto para el tipo de vivienda
+INSERT IGNORE INTO cat_tipo_vivienda (id_tipo_vivienda, tipo_vivienda) VALUES 
+(1, 'Propia'), 
+(2, 'Alquilada'), 
+(3, 'Familiar'), 
+(4, 'Otra');
+
+-- 3. Crear el catálogo de Fuente de Ingreso (opcional pero recomendado para el perfil)
+CREATE TABLE IF NOT EXISTS cat_fuente_ingreso (
+    id_fuente_ingreso INT AUTO_INCREMENT PRIMARY KEY,
+    fuente_ingreso VARCHAR(100) NOT NULL UNIQUE
+) ENGINE = INNODB;
+
+INSERT IGNORE INTO cat_fuente_ingreso (id_fuente_ingreso, fuente_ingreso) VALUES
+(1, 'Sueldo fijo'),
+(2, 'Variable'),
+(3, 'Inversiones'),
+(4, 'Remesas'),
+(5, 'Negocio propio'),
+(6, 'Otro');
+
+-- 4. Crear la tabla del perfil socioeconómico del cliente (vincula cliente con los catálogos)
+CREATE TABLE IF NOT EXISTS cliente_perfil_socioeconomico (
+    id_perfil_cliente INT PRIMARY KEY,
+    id_tipo_vivienda INT NULL,
+    cantidad_dependientes INT NOT NULL DEFAULT 0,
+    antiguedad_laboral_meses INT NOT NULL DEFAULT 0,
+    id_sector_economico INT NULL,
+    id_fuente_ingreso INT NULL,
+    fuente_ingresos VARCHAR(100) NULL,
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_perfil_cliente FOREIGN KEY (id_perfil_cliente) REFERENCES cliente(id_cliente) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_perfil_vivienda FOREIGN KEY (id_tipo_vivienda) REFERENCES cat_tipo_vivienda(id_tipo_vivienda),
+    CONSTRAINT fk_perfil_sector FOREIGN KEY (id_sector_economico) REFERENCES cat_sector_economico(id_sector_economico),
+    CONSTRAINT fk_perfil_fuente FOREIGN KEY (id_fuente_ingreso) REFERENCES cat_fuente_ingreso(id_fuente_ingreso)
+) ENGINE = INNODB;
+
+-- 5. Crear la tabla de evaluación estratégica (El núcleo de tu proceso inteligente)
+CREATE TABLE IF NOT EXISTS evaluacion_estrategica (
+    id_evaluacion_estrategica INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    id_prestamo INT NOT NULL,
+    salario_neto DECIMAL(14,2) NOT NULL DEFAULT 0,
+    tipo_ingreso ENUM('fijo', 'Variable') NOT NULL DEFAULT 'fijo',
+    empresa_laboral VARCHAR(255) NOT NULL DEFAULT 'N/D',
+    antiguedad_empleado INT NOT NULL DEFAULT 0,
+    id_sector_economico INT NOT NULL DEFAULT 1,
+    puntaje_crediticio INT NOT NULL DEFAULT 0,
+    cantidad_tarjetas_activas INT NOT NULL DEFAULT 0,
+    porcentaje_utilizacion_credito DECIMAL(5,2) NOT NULL DEFAULT 0,
+    total_deudas_externas DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_gastos_fijos DECIMAL(14,2) DEFAULT 0,
+    capacidad_pago DECIMAL(14,2) DEFAULT 0,
+    nivel_endeudamiento DECIMAL(5,2) DEFAULT 0,
+    id_tipo_vivienda INT NOT NULL DEFAULT 1,
+    cantidad_dependientes INT NOT NULL DEFAULT 0,
+    edad_al_finalizar INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_eval_cliente FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
+    CONSTRAINT fk_eval_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
+    CONSTRAINT fk_eval_sector FOREIGN KEY (id_sector_economico) REFERENCES cat_sector_economico(id_sector_economico),
+    CONSTRAINT fk_eval_vivienda FOREIGN KEY (id_tipo_vivienda) REFERENCES cat_tipo_vivienda(id_tipo_vivienda)
+) ENGINE = INNODB;
+
+-- 6. Crear la tabla para las contrapropuestas (ofertas generadas por el sistema)
+CREATE TABLE IF NOT EXISTS contrapropuesta_prestamo (
+    id_contrapropuesta INT AUTO_INCREMENT PRIMARY KEY,
+    id_prestamo INT NOT NULL,
+    monto_sugerido DECIMAL(14,2) NOT NULL,
+    plazo_sugerido INT NOT NULL,
+    estado_contrapropuesta ENUM('Pendiente', 'Aceptada', 'Rechazada') DEFAULT 'Pendiente',
+    fecha_contrapropuesta DATE NOT NULL,
+    CONSTRAINT fk_contrapropuesta_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
+) ENGINE = INNODB;
+
+-- 1. Crear catálogo de Niveles de Riesgo (por si no existe)
+CREATE TABLE IF NOT EXISTS cat_nivel_riesgo(
+    id_nivel_riesgo INT AUTO_INCREMENT PRIMARY KEY,
+    nivel VARCHAR(50) NOT NULL
+) ENGINE = INNODB;
+
+INSERT IGNORE INTO cat_nivel_riesgo (id_nivel_riesgo, nivel) VALUES 
+(1, 'Bajo'), (2, 'Medio'), (3, 'Alto');
+
+-- 2. Crear catálogo de Decisiones de Evaluación
+CREATE TABLE IF NOT EXISTS cat_decision_evaluacion(
+    id_decision_evaluacion INT AUTO_INCREMENT PRIMARY KEY,
+    codigo_decision VARCHAR(50) NOT NULL UNIQUE,
+    nombre_decision VARCHAR(100) NOT NULL,
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo'
+) ENGINE = INNODB;
+
+INSERT IGNORE INTO cat_decision_evaluacion(codigo_decision, nombre_decision, estado) VALUES
+('APROBADO', 'Aprobado', 'Activo'),
+('RECHAZADO', 'Rechazado', 'Activo'),
+('CONTRAPROPUESTA', 'Contrapropuesta', 'Activo'),
+('REVISION_MANUAL', 'Revision manual', 'Activo'),
+('PENDIENTE', 'Pendiente', 'Activo');
+
+-- 3. Crear tabla de Intervalos de Decisión (El error que te apareció)
+CREATE TABLE IF NOT EXISTS configuracion_intervalo_decision (
+    id_intervalo_decision INT AUTO_INCREMENT PRIMARY KEY,
+    puntaje_minimo INT NOT NULL,
+    puntaje_maximo INT NOT NULL,
+    id_decision_evaluacion INT NOT NULL,
+    prioridad INT NOT NULL,
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
+    vigente_desde DATE NOT NULL,
+    vigente_hasta DATE NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_intervalo_decison FOREIGN KEY (id_decision_evaluacion) REFERENCES cat_decision_evaluacion(id_decision_evaluacion)
+) ENGINE = INNODB;
+
+-- Insertar los rangos de decisión básicos
+INSERT IGNORE INTO configuracion_intervalo_decision(puntaje_minimo, puntaje_maximo, id_decision_evaluacion, prioridad, vigente_desde)
+SELECT 80, 100, id_decision_evaluacion, 1, CURDATE() FROM cat_decision_evaluacion WHERE codigo_decision='APROBADO';
+
+INSERT IGNORE INTO configuracion_intervalo_decision(puntaje_minimo, puntaje_maximo, id_decision_evaluacion, prioridad, vigente_desde)
+SELECT 40, 79, id_decision_evaluacion, 2, CURDATE() FROM cat_decision_evaluacion WHERE codigo_decision='CONTRAPROPUESTA';
+
+INSERT IGNORE INTO configuracion_intervalo_decision(puntaje_minimo, puntaje_maximo, id_decision_evaluacion, prioridad, vigente_desde)
+SELECT 20, 39, id_decision_evaluacion, 3, CURDATE() FROM cat_decision_evaluacion WHERE codigo_decision='REVISION_MANUAL';
+
+INSERT IGNORE INTO configuracion_intervalo_decision(puntaje_minimo, puntaje_maximo, id_decision_evaluacion, prioridad, vigente_desde)
+SELECT 0, 19, id_decision_evaluacion, 4, CURDATE() FROM cat_decision_evaluacion WHERE codigo_decision='RECHAZADO';
+
+-- 4. Crear tabla de Intervalos de Riesgo
+CREATE TABLE IF NOT EXISTS configuracion_intervalo_riesgo(
+    id_intervalo_riesgo INT AUTO_INCREMENT PRIMARY KEY,
+    puntaje_minimo INT NOT NULL,
+    puntaje_maximo INT NOT NULL,
+    id_nivel_riesgo INT NOT NULL,
+    prioridad INT NOT NULL, 
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
+    vigente_desde DATE NOT NULL,
+    vigente_hasta DATE NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_intervalo_riesgo_nivel FOREIGN KEY (id_nivel_riesgo) REFERENCES cat_nivel_riesgo(id_nivel_riesgo)
+) ENGINE = INNODB;
+
+-- Insertar los rangos de riesgo básicos
+INSERT IGNORE INTO configuracion_intervalo_riesgo (puntaje_minimo, puntaje_maximo, id_nivel_riesgo, prioridad, vigente_desde)
+SELECT 80, 100, id_nivel_riesgo, 1, CURDATE() FROM cat_nivel_riesgo WHERE nivel='Bajo';
+
+INSERT IGNORE INTO configuracion_intervalo_riesgo (puntaje_minimo, puntaje_maximo, id_nivel_riesgo, prioridad, vigente_desde)
+SELECT 50, 79, id_nivel_riesgo, 2, CURDATE() FROM cat_nivel_riesgo WHERE nivel='Medio';
+
+INSERT IGNORE INTO configuracion_intervalo_riesgo (puntaje_minimo, puntaje_maximo, id_nivel_riesgo, prioridad, vigente_desde)
+SELECT 0, 49, id_nivel_riesgo, 3, CURDATE() FROM cat_nivel_riesgo WHERE nivel='Alto';
+
+-- 5. Crear tabla de Configuración General (Donde viven los multiplicadores de la contrapropuesta)
+CREATE TABLE IF NOT EXISTS configuracion (
+    id_configuracion INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_configuracion VARCHAR(100) NOT NULL UNIQUE,
+    valor_decimal DECIMAL(14,2) NOT NULL,
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE = INNODB;
+
+-- Insertar los factores matemáticos del motor de simulación
+INSERT IGNORE INTO configuracion (nombre_configuracion, valor_decimal) VALUES 
+('FACTOR_CAPACIDAD_CONTRAPROPUESTA', 0.95),
+('FACTOR_EXTENSION_PLAZO_CONTRAPROPUESTA', 1.50),
+('MAX_PORCENTAJE_CAPACIDAD_PAGO', 0.40);
+
+-- 6. Crear tabla de Registro de Evaluación Final (Por si no la tienes)
+CREATE TABLE IF NOT EXISTS evaluacion_prestamo(
+    id_evaluacion_prestamo INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    id_prestamo INT NOT NULL,
+    capacidad_pago DECIMAL(14,2) NOT NULL,
+    puntaje_total INT NOT NULL,
+    nivel_riesgo INT,
+    estado_evaluacion ENUM('Aprobado', 'Rechazado', 'Contrapropuesta', 'Revision_manual', 'Pendiente') NOT NULL,
+    fecha_evaluacion DATE NOT NULL,
+    CONSTRAINT fk_eval_prestamo_cliente FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
+    CONSTRAINT fk_eval_prestamo_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
+    CONSTRAINT fk_nivel_riesgo_evaluacion FOREIGN KEY (nivel_riesgo) REFERENCES cat_nivel_riesgo(id_nivel_riesgo)
+) ENGINE = INNODB;
+
+
+-- Crear tabla de categorias de reglas
+CREATE TABLE IF NOT EXISTS cat_categoria_regla_evaluacion (
+    id_categoria_regla INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_categoria VARCHAR(100) NOT NULL UNIQUE,
+    descripcion VARCHAR(255) NOT NULL,
+    orden_visual INT NOT NULL DEFAULT 0,
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo'
+) ENGINE = INNODB;
+
+INSERT IGNORE INTO cat_categoria_regla_evaluacion (nombre_categoria, descripcion, orden_visual, estado) VALUES
+('Estabilidad laboral', 'Categoria: Estabilidad laboral', 1, 'Activo'),
+('Antiguedad laboral', 'Categoria: Antiguedad laboral', 2, 'Activo'),
+('Comportamiento crediticio', 'Categoria: Comportamiento crediticio', 3, 'Activo'),
+('Uso de credito', 'Categoria: Uso de credito', 4, 'Activo'),
+('Condicion de vivienda', 'Categoria: Condicion de vivienda', 5, 'Activo'),
+('Dependientes', 'Categoria: Dependientes', 6, 'Activo'),
+('Relacion con la entidad', 'Categoria: Relacion con la entidad', 7, 'Activo');
+
+-- Crear tabla de los puntajes internos
+CREATE TABLE IF NOT EXISTS reglas_puntaje_interno (
+    id_regla_puntaje INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_regla VARCHAR(100) NOT NULL,
+    clave_regla VARCHAR(50) NOT NULL UNIQUE,
+    puntos INT NOT NULL,
+    id_categoria_regla INT NOT NULL,
+    estado ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
+    CONSTRAINT fk_regla_categoria FOREIGN KEY (id_categoria_regla) REFERENCES cat_categoria_regla_evaluacion(id_categoria_regla)
+) ENGINE = INNODB;
+
+INSERT IGNORE INTO reglas_puntaje_interno (nombre_regla, clave_regla, puntos, id_categoria_regla, estado)
+SELECT r.nombre_regla, r.clave_regla, r.puntos, c.id_categoria_regla, r.estado
+FROM (
+    SELECT 'Publico' AS nombre_regla, 'ESTABILIDAD_PUBLICO' AS clave_regla, 25 AS puntos, 'Estabilidad laboral' AS nombre_categoria, 'Activo' AS estado
+    UNION ALL SELECT 'Privado fijo', 'ESTABILIDAD_PRIVADO_FIJO', 20, 'Estabilidad laboral', 'Activo'
+    UNION ALL SELECT 'Temporal', 'ESTABILIDAD_TEMPORAL', 0, 'Estabilidad laboral', 'Activo'
+    UNION ALL SELECT 'Independiente', 'ESTABILIDAD_INDEPENDIENTE', -10, 'Estabilidad laboral', 'Activo'
+    UNION ALL SELECT '2 anos o mas', 'ANTIGUEDAD_24M_O_MAS', 25, 'Antiguedad laboral', 'Activo'
+    UNION ALL SELECT '1 a 2 anos', 'ANTIGUEDAD_12_23M', 15, 'Antiguedad laboral', 'Activo'
+    UNION ALL SELECT '6 a 11 meses', 'ANTIGUEDAD_6_11M', 5, 'Antiguedad laboral', 'Activo'
+    UNION ALL SELECT 'Menos de 6 meses', 'ANTIGUEDAD_0_5M', 0, 'Antiguedad laboral', 'Activo'
+    UNION ALL SELECT 'Sin atrasos', 'COMPORTAMIENTO_SIN_ATRASOS', 30, 'Comportamiento crediticio', 'Activo'
+    UNION ALL SELECT 'Atrasos leves', 'COMPORTAMIENTO_ATRASOS_LEVES', 10, 'Comportamiento crediticio', 'Activo'
+    UNION ALL SELECT 'Atrasos recurrentes', 'COMPORTAMIENTO_ATRASOS_RECURRENTES', -30, 'Comportamiento crediticio', 'Activo'
+    UNION ALL SELECT 'Hasta 30%', 'USO_CREDITO_HASTA_30', 20, 'Uso de credito', 'Activo'
+    UNION ALL SELECT '30% a 70%', 'USO_CREDITO_31_70', 10, 'Uso de credito', 'Activo'
+    UNION ALL SELECT 'Mas de 70%', 'USO_CREDITO_MAS_70', -20, 'Uso de credito', 'Activo'
+    UNION ALL SELECT 'Propia', 'VIVIENDA_PROPIA', 20, 'Condicion de vivienda', 'Activo'
+    UNION ALL SELECT 'Familiar', 'VIVIENDA_FAMILIAR', 10, 'Condicion de vivienda', 'Activo'
+    UNION ALL SELECT 'Alquilada', 'VIVIENDA_ALQUILADA', 5, 'Condicion de vivienda', 'Activo'
+    UNION ALL SELECT '0 dependientes', 'DEPENDIENTES_0', 15, 'Dependientes', 'Activo'
+    UNION ALL SELECT '1 a 2 dependientes', 'DEPENDIENTES_1_2', 10, 'Dependientes', 'Activo'
+    UNION ALL SELECT '3 a 4 dependientes', 'DEPENDIENTES_3_4', 0, 'Dependientes', 'Activo'
+    UNION ALL SELECT 'Mas de 4 dependientes', 'DEPENDIENTES_MAS_4', -10, 'Dependientes', 'Activo'
+    UNION ALL SELECT 'Cliente bueno', 'RELACION_CLIENTE_BUENO', 30, 'Relacion con la entidad', 'Activo'
+    UNION ALL SELECT 'Nuevo', 'RELACION_NUEVO', 10, 'Relacion con la entidad', 'Activo'
+    UNION ALL SELECT 'Historial negativo', 'RELACION_HISTORIAL_NEGATIVO', -40, 'Relacion con la entidad', 'Activo'
+) r
+INNER JOIN cat_categoria_regla_evaluacion c
+    ON c.nombre_categoria = r.nombre_categoria;
+
+    INSERT IGNORE INTO configuracion (nombre_configuracion, valor_decimal, estado) 
+VALUES ('UPSELL_PORCENTAJE', 0.15, 'Activo');
+
+ALTER TABLE tipo_prestamo
+ADD COLUMN cp_permitir_monto ENUM('Si', 'No') DEFAULT 'Si',
+ADD COLUMN cp_upsell_pct DECIMAL(5,2) DEFAULT 15.00,
+ADD COLUMN cp_downsell_pct DECIMAL(5,2) DEFAULT 30.00,
+ADD COLUMN cp_permitir_plazo ENUM('Si', 'No') DEFAULT 'Si',
+ADD COLUMN cp_factor_plazo DECIMAL(4,2) DEFAULT 1.50,
+ADD COLUMN cp_permitir_tasa ENUM('Si', 'No') DEFAULT 'No',
+ADD COLUMN cp_tasa_minima DECIMAL(5,2) DEFAULT 10.00,
+ADD COLUMN cp_permitir_amortizacion ENUM('Si', 'No') DEFAULT 'No';
+
+
+-- porcentaje de capacidad de pago máximo permitido para el tipo de préstamo
+ALTER TABLE tipo_prestamo 
+ADD COLUMN porcentaje_capacidad DECIMAL(5,2) DEFAULT 40.00 AFTER plazo_maximo_meses;
