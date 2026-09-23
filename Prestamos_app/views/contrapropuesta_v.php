@@ -31,10 +31,8 @@ $cuota_orig = (float)$vm['cuota_orig'];
 $cap_disponible = (float)$vm['cap_disponible'];
 $requiere_ajuste = $cuota_orig > $cap_disponible;
 
-if (empty($contrapropuestas)) {
-    header('Location: resultado_v.php?id_prestamo=' . $id_prestamo);
-    exit;
-}
+$razones_rechazo = $_SESSION['razones_rechazo'][$id_prestamo] ?? [];
+
 
 $APP_BASE = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $APP_BASE = preg_replace('#/views$#', '', $APP_BASE);
@@ -138,7 +136,7 @@ $BASE = $APP_BASE;
         <?php endif; ?>
       </div>
     </header>
-
+          
     <div class="page-wrapper">
       <div class="cp-page">
         <div class="cp-header">
@@ -179,53 +177,57 @@ $BASE = $APP_BASE;
           </div>
         </div>
 
-        <?php if ($requiere_ajuste): ?>
+        <?php if ($requiere_ajuste || !empty($razones_rechazo)): ?>
         <div class="cp-explainer">
           ⚠️
-          <div>La cuota mensual del prestamo solicitado supera la capacidad de pago disponible del cliente. Selecciona una alternativa para continuar.</div>
+          <div>
+            <strong style="color: #b91c1c;">La solicitud original no es viable debido a las siguientes restricciones:</strong>
+            <ul style="margin-top: 8px; margin-left: 20px; font-weight: 500; font-size: 0.85rem; color: #92400e; list-style-type: disc;">
+                <?php foreach ($razones_rechazo as $razon): ?>
+                    <li style="margin-bottom: 4px;"><?= htmlspecialchars($razon) ?></li>
+                <?php endforeach; ?>
+                <?php if(empty($razones_rechazo)): ?>
+                    <li>El perfil de riesgo crediticio del cliente no permite aprobar las condiciones originales.</li>
+                <?php endif; ?>
+            </ul>
+            <p style="margin-top: 10px; font-weight: 600;">El sistema ha generado automáticamente las siguientes opciones estratégicas viables para retener la solicitud de forma segura.</p>
+          </div>
         </div>
         <?php else: ?>
         <div class="cp-explainer" style="background:#f0fdf4; border-color:#bbf7d0; color:#166534;">
           ✅
-          <div>La solicitud original ya cumple con la capacidad disponible. Si llegaste aqui por una evaluacion anterior, reevalua o vuelve al resultado para continuar con aprobacion.</div>
+          <div>La solicitud original ya cumple con las políticas y capacidad disponible.</div>
         </div>
         <?php endif; ?>
 
-        <div class="cp-options-grid">
-          <?php foreach ($contrapropuestas as $cp): ?>
-          <div class="cp-option-card" id="card-opcion-<?= (int)$cp['opcion'] ?>">
-            <div class="cp-option-num">Opcion <?= (int)$cp['opcion'] ?></div>
-            <div class="cp-option-monto">RD$ <?= number_format((float)$cp['monto'], 2) ?></div>
-            <div class="cp-option-rows">
-              <div class="cp-option-row">
-                <span class="lbl">Plazo</span>
-                <span class="val"><?= (int)$cp['plazo'] ?> meses</span>
-              </div>
-              <div class="cp-option-row">
-                <span class="lbl">Cuota mensual</span>
-                <span class="val" style="color:#16a34a;">RD$ <?= number_format((float)$cp['cuota'], 2) ?></span>
-              </div>
-              <div class="cp-option-row">
-                <span class="lbl">Tasa interes</span>
-                <span class="val"><?= number_format((float)$cp['tasa'], 2) ?>%</span>
-              </div>
-              <div class="cp-option-row">
-                <span class="lbl">Total a pagar</span>
-                <span class="val">RD$ <?= number_format((float)$cp['total_pagar'], 2) ?></span>
-              </div>
+        
+        <div class="cp-option-card <?= ($es_aprobado) ? '' : (($cp['opcion'] == 1) ? 'selected' : '') ?>" id="card-<?= $cp['opcion'] ?>">
+          
+          <!-- Indicador tipo LED futurista -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 8px; height: 8px; background: var(--cp-primary); border-radius: 50%; box-shadow: 0 0 8px var(--cp-primary);"></div>
+            <div style="font-size: .78rem; font-weight: 800; color: var(--cp-primary); letter-spacing: 0.1em;">
+              SYS_OPT_<?= $cp['opcion'] ?> // ESTRATEGIA
             </div>
-            <div class="cp-option-desc"><?= htmlspecialchars((string)($cp['descripcion'] ?? '')) ?></div>
-            <button
-              class="cp-option-btn"
-              onclick='abrirConfirmacion(<?= htmlspecialchars(json_encode($cp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, "UTF-8") ?>)'>
-              📋 Seleccionar
-            </button>
           </div>
-          <?php endforeach; ?>
+
+          <div class="cp-option-monto">RD$ <?= number_format($cp['monto'], 2) ?></div>
+          
+          <div style="border-top: 1px dashed var(--cp-border); padding-top: 10px;">
+            <div class="cp-option-row"><span style="font-family: monospace;">[PLAZO]</span><strong><?= $cp['plazo'] ?> MESES</strong></div>
+            <div class="cp-option-row"><span style="font-family: monospace;">[CUOTA_SEGURA]</span><strong style="color: var(--cp-success);">RD$ <?= number_format($cp['cuota'], 2) ?></strong></div>
+          </div>
+          
+          <div style="font-size: .75rem; color: #6b7280; font-family: monospace;">> <?= htmlspecialchars($cp['descripcion'] ?? 'Ajuste paramétrico activo.') ?></div>
+          
+          <!-- Botón de acción -->
+          <button class="cp-option-btn" onclick='abrirConfirmacion(<?= htmlspecialchars(json_encode($cp, JSON_UNESCAPED_UNICODE), ENT_QUOTES, "UTF-8") ?>)'>
+            [ EJECUTAR OFERTA ]
+          </button>
         </div>
 
         <div class="cp-reject-wrap">
-          <button class="cp-reject-btn" onclick="rechazarTodo()">📋 Rechazar contrapropuestas / cancelar solicitud</button>
+          <button class="cp-reject-btn" onclick="rechazarTodo()">✖️ Ignorar / Rechazar y Cancelar Solicitud</button>
         </div>
       </div>
     </div>
@@ -233,17 +235,22 @@ $BASE = $APP_BASE;
 </div>
 
 <div class="cp-confirm-overlay" id="confirmOverlay">
-  <div class="cp-confirm-dialog">
-    <div class="cp-confirm-title">Confirmar seleccion de contrapropuesta</div>
-    <div class="cp-confirm-sub">Detalles de la opcion elegida:</div>
-    <div class="cp-confirm-detail" id="confirmDetail"></div>
-    <div class="cp-confirm-btns">
-      <button class="cp-confirm-ok" id="confirmOkBtn">📋 Confirmar contrapropuesta</button>
-      <button class="cp-confirm-cancel" onclick="cerrarModal()">✕ Elegir otra opcion</button>
+  <div class="cp-confirm-dialog" style="border-radius: 0; border: 1px solid var(--cp-primary); box-shadow: 0 0 30px rgba(79,70,229,0.3);">
+    
+    <h3 style="margin-bottom: 10px; font-family: monospace; color: var(--cp-primary);">> CONFIRMACIÓN_REQUERIDA</h3>
+    <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 20px;">Inicializando recálculo de cronograma...</p>
+    
+    <div id="confirmDetail" style="background: rgba(79,70,229,0.05); border-left: 3px solid var(--cp-primary); padding:15px; margin-bottom:20px; font-family: monospace;"></div>
+    
+    <div style="display:flex; gap: 10px; flex-direction: column;">
+        <!-- Botón de confirmar destacado con el estilo futurista -->
+        <button class="cp-option-btn" id="confirmOkBtn" style="background: var(--cp-success); color: white;">[ INICIAR DESEMBOLSO ]</button>
+        <button style="padding: 10px; background: transparent; border: 1px solid var(--cp-border); cursor: pointer; font-weight: bold; font-family: monospace; color: #374151;" onclick="cerrarModal()">[ ABORTAR ]</button>
     </div>
   </div>
 </div>
 
 <script src="public/JS/contrapropuesta.js"></script>
+
 </body>
 </html>

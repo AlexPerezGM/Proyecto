@@ -105,10 +105,11 @@ $APP_BASE = $APP_BASE . '/';
     </header>
     <main class="page-wrapper">
       <div class="config-tabs">
-        <button class="tab-btn active" data-tab="catalogos">Catálogos</button>
+        <button class="tab-btn" data-tab="catalogos">Catálogos</button>
         <button class="tab-btn" data-tab="parametros">Parámetros del Sistema</button>
         <button class="tab-btn" data-tab="evaluacion">Reglas de Evaluación</button>
-        <button class="tab-btn" data-tab="intervalos_evaluacion">Intervalos de Evaluación</button>
+        <button class="tab-btn active" data-tab="intervalos_evaluacion">Intervalos de Evaluación</button>
+        <button class="tab-btn" data-tab="parametros_cp">Reglas de Contrapropuesta</button>
         <button class="tab-btn" data-tab="auditoria">Gestión de Auditoría</button>
         <button class="tab-btn" data-tab="fondos">Administración de Fondos y Caja</button>
       </div>
@@ -325,9 +326,10 @@ $APP_BASE = $APP_BASE . '/';
                     <tr>
                       <th>Nombre</th>
                       <th>Tasa Interés (%)</th>
-                      <th>Monto Mínimo</th>
-                      <th>Plazo Mín. (meses)</th>
-                      <th>Plazo Máx. (meses)</th>
+                      <th>Monto Mín.</th>
+                      <th>Plazo Mín.</th>
+                      <th>Plazo Máx.</th>
+                      <th>Capacidad (%)</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -532,6 +534,120 @@ $APP_BASE = $APP_BASE . '/';
           </div>
         </div>
       </section>
+
+<!-- SECCIÓN DE CONTRAPROPUESTAS (REGLAS DE IA POR PRODUCTO) -->
+      <section id="parametros_cp" class="config-section">
+        <div class="config-card full-width">
+          <div class="config-card-header">
+            <h3>Límites del Motor de IA por Producto</h3>
+            <span style="font-size: 0.8rem; color: var(--text-dim);">Define los márgenes de negociación y rentabilidad que la IA debe respetar para cada tipo de préstamo.</span>
+          </div>
+          <div class="config-card-body">
+            <div class="table-container">
+              <table id="tableParametrosCP" class="config-table">
+                <thead>
+                  <tr>
+                    <th>Tipo de Préstamo</th>
+                    <th>¿Toca Monto? (Up/Down)</th>
+                    <th>¿Toca Plazo? (Máx Ext.)</th>
+                    <th>¿Toca Tasa? (Piso %)</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+        <!-- Modal de Edición de Parámetros de Contrapropuesta -->
+        <div id="modalParametroCP" class="modal">
+          <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+              <h3>Configurar Límites de IA</h3>
+            </div>
+            <form id="formParametroCP" onsubmit="saveParametroCP(event)">
+              <input type="hidden" id="idParametroCP" name="id">
+              
+              <div class="form-group">
+                <label>Producto a Configurar:</label>
+                <input type="text" id="nombreParametroCP" class="input" readonly style="background: #f3f4f6; color: #4f46e5; font-weight: bold; font-size: 1.1rem;">
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                  <!-- MONTO -->
+                  <div style="background: #f8fafc; padding: 10px; border-radius: 8px;">
+                    <div class="form-group">
+                        <label><b>1. Alterar Monto:</b></label>
+                        <select id="p_monto" name="cp_permitir_monto" class="input" required>
+                            <option value="Si">Sí</option><option value="No">No</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Up-Sell Máximo (%):</label>
+                        <input type="number" id="p_upsell" name="cp_upsell_pct" class="input" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Down-Sell Máximo (% recorte):</label>
+                        <input type="number" id="p_downsell" name="cp_downsell_pct" class="input" step="0.01" min="0" max="100">
+                    </div>
+                  </div>
+
+                  <!-- PLAZO -->
+                  <div style="background: #f8fafc; padding: 10px; border-radius: 8px;">
+                    <div class="form-group">
+                        <label><b>2. Alterar Plazo:</b></label>
+                        <select id="p_plazo" name="cp_permitir_plazo" class="input" required>
+                            <option value="Si">Sí</option><option value="No">No</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Factor Extensión (Ej. 1.5):</label>
+                        <input type="number" id="p_factor" name="cp_factor_plazo" class="input" step="0.01" min="1">
+                    </div>
+                  </div>
+
+                  <!-- TASA Y AMORTIZACIÓN -->
+                  <div style="background: #f8fafc; padding: 10px; border-radius: 8px; grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                      <div>
+                          <div class="form-group">
+                              <label><b>3. Reducir Tasa:</b></label>
+                              <select id="p_tasa" name="cp_permitir_tasa" class="input" required>
+                                  <option value="Si">Sí</option><option value="No">No</option>
+                              </select>
+                          </div>
+                          <div class="form-group">
+                              <label>Tasa Mínima (Piso %):</label>
+                              <input type="number" id="p_tasa_min" name="cp_tasa_minima" class="input" step="0.01" min="0">
+                          </div>
+                      </div>
+                      <div>
+                          <div class="form-group">
+                              <label><b>4. Modificar Amortización:</b></label>
+                              <select id="p_amort" name="cp_permitir_amortizacion" class="input" required>
+                                  <option value="Si">Sí</option><option value="No">No</option>
+                              </select>
+                              <small style="display:block; margin-top:5px; color:#6b7280; line-height: 1.2;">Pasa de Alemán a Francés si ayuda a la cuota.</small>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              <div class="modal-actions" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" onclick="closeModal('modalParametroCP')">Cancelar</button>
+                <button type="submit" class="btn-primary">Guardar Reglas</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modalParametroCP')">Cancelar</button>
+        <button type="submit" class="btn-primary">Guardar Reglas</button>
+      </div>
+    </form>
+  </div>
+</div>
 
       <div id="modalReglaPuntaje" class="modal">
         <div class="modal-content">
@@ -760,6 +876,11 @@ $APP_BASE = $APP_BASE . '/';
         <input type="number" id="plazoMinimoTipoPrestamo" name="plazo_minimo_meses" required min="1">
       </div>
       <div class="form-group">
+        <label for="porcentajeCapacidadTipoPrestamo">Capacidad Máxima de Salario (%):</label>
+        <input type="number" id="porcentajeCapacidadTipoPrestamo" name="porcentaje_capacidad" required step="0.01" min="1" max="100" value="40">
+        <small style="color:gray; font-size: 0.8rem;">Ej: 40 para usar máximo el 40% del salario neto del cliente.</small>
+      </div>
+      <div class="form-group">
         <label for="plazoMaximoTipoPrestamo">Plazo Máximo (meses):</label>
         <input type="number" id="plazoMaximoTipoPrestamo" name="plazo_maximo_meses" required min="1">
       </div>
@@ -911,8 +1032,10 @@ $APP_BASE = $APP_BASE . '/';
         <input type="number" id="riesgoMax" name="puntaje_maximo" required>
       </div>
       <div class="form-group">
-        <label>ID Nivel de Riesgo:</label>
-        <input type="number" id="idNivelRiesgo" name="id_nivel_riesgo" required min="1">
+        <label>Nivel de Riesgo:</label>
+        <select id="idNivelRiesgo" name="id_nivel_riesgo" required class="input">
+            <option value="">Cargando...</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Prioridad:</label>
@@ -957,8 +1080,10 @@ $APP_BASE = $APP_BASE . '/';
         <input type="number" id="decisionMax" name="puntaje_maximo" required>
       </div>
       <div class="form-group">
-        <label>Decision:</label>
-        <input type="number" id="idDecisionEvaluacion" name="id_decision_evaluacion" required maxlength="50">
+        <label>Decisión Estratégica:</label>
+        <select id="idDecisionEvaluacion" name="id_decision_evaluacion" required class="input">
+            <option value="">Cargando...</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Prioridad:</label>
@@ -986,6 +1111,33 @@ $APP_BASE = $APP_BASE . '/';
     </form>
   </div>
 </div>
+<!-- Modal de Edición de Parámetros de Contrapropuesta -->
+<div id="modalParametroCP" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Configurar Permiso</h3>
+    </div>
+    <form id="formParametroCP" onsubmit="saveParametroCP(event)">
+      <input type="hidden" id="idParametroCP" name="id">
+      <div class="form-group">
+        <label>Variable:</label>
+        <input type="text" id="nombreParametroCP" class="input" readonly style="background: #f3f4f6; color: #6b7280;">
+      </div>
+      <div class="form-group">
+        <label>¿Permitir al sistema modificar este valor?</label>
+        <select id="permitirParametroCP" name="permitir_modificacion" class="input" required>
+          <option value="Si">Sí, permitir</option>
+          <option value="No">No, bloquear (Estricto)</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('modalParametroCP')">Cancelar</button>
+        <button type="submit" class="btn-primary">Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </div>
 </body>
 </html>

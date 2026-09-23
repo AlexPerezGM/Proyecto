@@ -126,6 +126,7 @@ $BASE = $APP_BASE;
       </div>
     </header>
     <div class="page-wrapper">
+          
       <div class="ev-page">
         <div class="ev-header-card">
           <div class="ev-header-title">Evaluacion de solicitud de prestamo</div>

@@ -68,56 +68,41 @@ $BASE = $APP_BASE;
     <div class="sidebar-inner">
       <div class="sidebar-section">
         <div class="section-label">DASHBOARD</div>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/dashboard.php">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-text">Dashboard</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/dashboard.php">
+          <span class="nav-icon">🏠</span><span class="nav-text">Dashboard</span>
         </a>
       </div>
       <div class="sidebar-section">
         <div class="section-label">GESTION</div>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/clientes.php">
-          <span class="nav-icon">👥</span>
-          <span class="nav-text">Gestion de Clientes</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/clientes.php">
+          <span class="nav-icon">👥</span><span class="nav-text">Gestion de Clientes</span>
         </a>
-        <a class="nav-link active" 
-          href="<?= $APP_BASE ?>views/prestamos.php">
-          <span class="nav-icon">💼</span>
-          <span class="nav-text">Control de Prestamos</span>
+        <a class="nav-link active" href="<?= $APP_BASE ?>views/prestamos.php">
+          <span class="nav-icon">💼</span><span class="nav-text">Control de Prestamos</span>
         </a>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/pagos.php">
-          <span class="nav-icon">💰</span>
-          <span class="nav-text">Gestion de Pagos</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/pagos.php">
+          <span class="nav-icon">💰</span><span class="nav-text">Gestion de Pagos</span>
         </a>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/seguimiento.php">
-          <span class="nav-icon">📈</span>
-          <span class="nav-text">Seguimiento de Prestamos</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/seguimiento.php">
+          <span class="nav-icon">📈</span><span class="nav-text">Seguimiento de Prestamos</span>
+        </a>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/reestructuracion.php">
+          <span class="nav-icon">♻️</span><span class="nav-text">Reestructuración de Préstamos</span>
         </a>
       </div>
       <div class="sidebar-section">
         <div class="section-label">ADMINISTRACION</div>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/seguridad.php">
-          <span class="nav-icon">🔐</span>
-          <span class="nav-text">Usuarios y Roles</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/seguridad.php">
+          <span class="nav-icon">🔐</span><span class="nav-text">Usuarios y Roles</span>
         </a>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/rrhh.php">
-          <span class="nav-icon">🧑</span>
-          <span class="nav-text">Recursos Humanos</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/rrhh.php">
+          <span class="nav-icon">🧑</span><span class="nav-text">Recursos Humanos</span>
         </a>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>views/configuracion.php">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-text">Configuracion</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>views/configuracion.php">
+          <span class="nav-icon">⚙️</span><span class="nav-text">Configuracion</span>
         </a>
-        <a class="nav-link" 
-          href="<?= $APP_BASE ?>api/cerrar_sesion.php">
-          <span class="nav-icon">🚪</span>
-          <span class="nav-text">Cerrar Sesion</span>
+        <a class="nav-link" href="<?= $APP_BASE ?>api/cerrar_sesion.php">
+          <span class="nav-icon">🚪</span><span class="nav-text">Cerrar Sesion</span>
         </a>
       </div>
     </div>
@@ -128,7 +113,7 @@ $BASE = $APP_BASE;
       <div class="topbar-left">
         <div class="brand-inline">
           <span class="brand-logo">📊</span>
-          <span class="brand-name">Resultado de Evaluacion</span>
+          <span class="brand-name">Sistema de Análisis Financiero</span>
         </div>
       </div>
       <div class="topbar-right">
@@ -144,166 +129,130 @@ $BASE = $APP_BASE;
       </div>
     </header>
 
-    <div class="page-wrapper">
-      <div class="res-page">
-        <div class="res-header">
-          <div class="res-header-title">Resultados de la evaluacion</div>
-          <div class="res-decision-badge"><?= $col['icon'] ?> <?= htmlspecialchars($col['label']) ?></div>
+    <div class="hud-workspace">
+        
+        <!-- CABECERA: ACCIONES Y DICTAMEN PRINCIPAL -->
+        <div class="hud-top-banner">
+            <div class="hud-banner-info">
+                <div class="hud-banner-badge"><?= $col['icon'] ?> <?= htmlspecialchars($col['label']) ?></div>
+                <h1 class="hud-banner-title">Evaluación de Solicitud</h1>
+                <p class="hud-banner-subtitle">Contrato N° <?= htmlspecialchars((string)$ev['numero_contrato']) ?> • Evaluación: <?= htmlspecialchars((string)$ev['fecha_evaluacion']) ?></p>
+            </div>
+            
+            <!-- Botones de Acción Primero -->
+            <div class="hud-actions-zone">
+                <button class="hud-btn hud-btn-outline" onclick="window.location='<?= $APP_BASE ?>views/prestamos.php'">← Retornar</button>
+                <button class="hud-btn hud-btn-outline" onclick="window.print()">🖨️ Exportar / Imprimir</button>
+                <?php if ($decision === 'Aprobado'): ?>
+                <button class="hud-btn hud-btn-action" id="btnGenerarContrato">📋 Generar Contrato</button>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <div class="res-grid">
-          <div style="display:flex; flex-direction:column; gap:16px;">
-            <div class="res-card">
-              <div class="res-card-title">🏆 Puntaje interno del cliente</div>
-              <?php
-                $puntajeNum = is_numeric($puntaje) ? (int)$puntaje : 0;
-                $scoreClass = $puntajeNum >= 80 ? 'res-score-green' : ($puntajeNum >= 40 ? 'res-score-yellow' : 'res-score-red');
-                $riskClass = ($ev['nivel_riesgo'] ?? '') === 'Bajo' ? 'risk-bajo' : ((($ev['nivel_riesgo'] ?? '') === 'Medio') ? 'risk-medio' : 'risk-alto');
-              ?>
-              <div class="res-score-big <?= $scoreClass ?>"><?= htmlspecialchars((string)$puntaje) ?></div>
-              <span class="res-risk-label <?= $riskClass ?>">Nivel de riesgo: <?= htmlspecialchars((string)($ev['nivel_riesgo'] ?? 'N/D')) ?></span>
+        <div class="hud-main-grid">
+            
+            <!-- PANEL 1: MOTOR DE RIESGO -->
+            <div class="hud-panel">
+                <div class="hud-panel-header">
+                    <h3>🏆 Motor de Riesgo y Perfil</h3>
+                </div>
+                <div class="hud-panel-body">
+                    <?php
+                        $puntajeNum = is_numeric($puntaje) ? (int)$puntaje : 0;
+                        $scoreClass = $puntajeNum >= 80 ? 'score-optimal' : ($puntajeNum >= 40 ? 'score-warning' : 'score-critical');
+                        $riskClass = ($ev['nivel_riesgo'] ?? '') === 'Bajo' ? 'risk-low' : ((($ev['nivel_riesgo'] ?? '') === 'Medio') ? 'risk-mid' : 'risk-high');
+                    ?>
+                    
+                    <div class="hud-score-display">
+                        <div class="hud-score-circle <?= $scoreClass ?>">
+                            <span class="score-value"><?= htmlspecialchars((string)$puntaje) ?></span>
+                            <span class="score-label">PUNTOS</span>
+                        </div>
+                        <div class="hud-risk-tag <?= $riskClass ?>">Riesgo <?= htmlspecialchars((string)($ev['nivel_riesgo'] ?? 'N/D')) ?></div>
+                    </div>
 
-              <div style="margin-top:18px;">
-                <div class="res-hist-row">
-                  <span>Historial de pagos</span>
-                  <span id="txtHistPagos"><?= (int)$hist['pagos_ok'] ?> al dia, <?= (int)$hist['pagos_vencidos'] ?> vencidos</span>
+                    <div class="hud-data-list">
+                        <div class="hud-data-row"><span>Comportamiento de Pagos</span><strong><?= (int)$hist['pagos_ok'] ?> al día / <?= (int)$hist['pagos_vencidos'] ?> venc.</strong></div>
+                        <div class="hud-data-row"><span>Antigüedad del Cliente</span><strong><?= (int)$mesesCliente ?> meses</strong></div>
+                        <div class="hud-data-row"><span>Créditos Activos</span><strong><?= (int)$hist['prestamos_activos'] ?></strong></div>
+                        <div class="hud-data-row"><span>Score Buró Externo</span><strong><?= htmlspecialchars((string)($ev['score_crediticio'] ?? '—')) ?></strong></div>
+                    </div>
                 </div>
-                <div class="res-hist-row">
-                  <span>Tiempo como cliente</span>
-                  <span id="txtTiempoCliente"><?= (int)$mesesCliente ?> mes(es)</span>
-                </div>
-                <div class="res-hist-row">
-                  <span>Creditos activos</span>
-                  <span id="txtCreditosActivos"><?= (int)$hist['prestamos_activos'] ?></span>
-                </div>
-                <div class="res-hist-row">
-                  <span>Score crediticio</span>
-                  <span><?= htmlspecialchars((string)($ev['score_crediticio'] ?? '—')) ?></span>
-                </div>
-              </div>
             </div>
 
-            <div class="res-card">
-              <div class="res-card-title">💰 Capacidad de pago</div>
-              <div class="res-hist-row">
-                <span>Ingresos mensuales</span>
-                <span>RD$ <?= number_format((float)($ev['ingresos_mensuales'] ?? 0), 2) ?></span>
-              </div>
-              <div class="res-hist-row">
-                <span>Egresos mensuales</span>
-                <span>RD$ <?= number_format((float)($ev['egresos_mensuales'] ?? 0), 2) ?></span>
-              </div>
-              <div class="res-hist-row">
-                <span>Capacidad de pago neta</span>
-                <span style="color:#4f46e5; font-weight:700;">RD$ <?= number_format($capacidad, 2) ?></span>
-              </div>
-              <div class="res-hist-row">
-                <span>Cuota mensual calculada</span>
-                <span style="color:<?= $cuota <= $capacidad ? '#16a34a' : '#dc2626' ?>; font-weight:700;">RD$ <?= number_format($cuota, 2) ?></span>
-              </div>
+            <!-- PANEL 2: TELEMETRÍA DE CAPACIDAD -->
+            <div class="hud-panel">
+                <div class="hud-panel-header">
+                    <h3>💰 Telemetría de Capacidad</h3>
+                </div>
+                <div class="hud-panel-body">
+                    <div class="hud-data-list">
+                        <div class="hud-data-row"><span>Ingresos Verificados</span><strong>RD$ <?= number_format((float)($ev['ingresos_mensuales'] ?? 0), 2) ?></strong></div>
+                        <div class="hud-data-row"><span>Egresos Estimados</span><strong>RD$ <?= number_format((float)($ev['egresos_mensuales'] ?? 0), 2) ?></strong></div>
+                        <div class="hud-data-row highlight"><span>Capacidad Neta (Margen)</span><strong style="color: #4f46e5;">RD$ <?= number_format($capacidad, 2) ?></strong></div>
+                        <div class="hud-data-row highlight"><span>Proyección de Cuota</span><strong style="color: <?= $cuota <= $capacidad ? '#16a34a' : '#dc2626' ?>;">RD$ <?= number_format($cuota, 2) ?></strong></div>
+                    </div>
 
-              <div class="res-cap-bar-wrap">
-                <div style="font-size:.78rem; color:#6b7280; margin-bottom:4px;">Porcentaje cubierto por la capacidad de pago</div>
-                <div class="res-cap-bar-track">
-                  <div class="res-cap-bar-fill"></div>
+                    <div class="hud-meter-container">
+                        <div class="hud-meter-labels">
+                            <span>Ocupación de Capacidad</span>
+                            <span><?= (int)$porcCubierto ?>%</span>
+                        </div>
+                        <div class="hud-meter-track">
+                            <div class="hud-meter-fill" style="width: var(--res-cap-fill-width); background: var(--res-cap-fill-bg);"></div>
+                        </div>
+                        <div class="hud-meter-legend">
+                            <span>0%</span>
+                            <span style="color: var(--res-cap-fill-bg); font-weight: 700;">Estado Actual</span>
+                            <span>100% (Tope)</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="res-cap-bar-label">
-                  <span>0%</span>
-                  <span style="font-weight:700; color:#111;"><?= (int)$porcCubierto ?>%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:16px;">
-            <div class="res-card">
-              <div class="res-card-title">📄 Condiciones del prestamo</div>
-              <div class="res-cond-grid">
-                <div class="res-cond-item">
-                  <label>Numero de contrato</label>
-                  <span><?= htmlspecialchars((string)$ev['numero_contrato']) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Tipo de prestamo</label>
-                  <span><?= htmlspecialchars((string)$ev['tipo_prestamo']) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Monto solicitado</label>
-                  <span>RD$ <?= number_format($monto, 2) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Total a pagar</label>
-                  <span>RD$ <?= number_format($totalPagar, 2) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Tasa de interes</label>
-                  <span><?= number_format($tasaAnual, 2) ?>% anual</span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Fecha de evaluacion</label>
-                  <span><?= htmlspecialchars((string)$ev['fecha_evaluacion']) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Plazo</label>
-                  <span><?= (int)$plazo ?> meses</span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Tipo de amortizacion</label>
-                  <span><?= htmlspecialchars((string)($ev['tipo_amortizacion'] ?? 'N/D')) ?></span>
-                </div>
-                <div class="res-cond-item">
-                  <label>Cuota mensual</label>
-                  <span>RD$ <?= number_format($cuota, 2) ?></span>
-                </div>
-              </div>
-
-              <div class="res-estado-banner">
-                <?= $col['icon'] ?>
-                Estado:
-                <?php
-                  if ($decision === 'Aprobado') {
-                      echo 'Aprobado - listo para desembolso';
-                  } elseif ($decision === 'Rechazado') {
-                      echo 'Rechazado';
-                  } elseif ($decision === 'Contrapropuesta') {
-                      echo 'Se requiere validar contrapropuesta';
-                  } elseif ($decision === 'Revision_manual') {
-                      echo 'En revision manual por analista de credito';
-                  } else {
-                      echo 'Pendiente';
-                  }
-                ?>
-              </div>
-
-              <?php if ($decision === 'Rechazado' && !empty($razones)): ?>
-              <div style="margin-top:14px;">
-                <div class="res-card-title" style="color:#dc2626;">⚠️ Razones de rechazo</div>
-                <ul class="res-rejection-list">
-                  <?php foreach ($razones as $r): ?>
-                  <li><?= htmlspecialchars($r) ?></li>
-                  <?php endforeach; ?>
-                </ul>
-              </div>
-              <?php endif; ?>
-
-              <?php if ($decision === 'Revision_manual' || $decision === 'Pendiente'): ?>
-              <div style="margin-top:14px; padding:12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:.88rem; color:#78350f;">
-                <strong>⏳ Revision manual requerida:</strong> El analista revisara la solicitud antes de emitir una respuesta final.
-              </div>
-              <?php endif; ?>
             </div>
 
-            <div class="res-actions">
-              <button class="res-btn res-btn-back" onclick="window.location='<?= $APP_BASE ?>views/prestamos.php'">← Salir</button>
-              <button class="res-btn res-btn-print" onclick="window.print()">🖨️ Imprimir</button>
-              <?php if ($decision === 'Aprobado'): ?>
-              <button class="res-btn res-btn-primary" id="btnGenerarContrato">📋 Generar contrato</button>
-              <?php endif; ?>
+            <!-- PANEL 3: ESTRUCTURA DEL CONTRATO Y LOG -->
+            <div class="hud-panel panel-span-all">
+                <div class="hud-panel-header">
+                    <h3>📄 Estructura Financiera Propuesta</h3>
+                </div>
+                <div class="hud-panel-body hud-contract-grid">
+                    <div class="hud-contract-item"><label>Tipo Producto</label><span><?= htmlspecialchars((string)$ev['tipo_prestamo']) ?></span></div>
+                    <div class="hud-contract-item"><label>Monto Base</label><span>RD$ <?= number_format($monto, 2) ?></span></div>
+                    <div class="hud-contract-item"><label>Plazo Aprobado</label><span><?= (int)$plazo ?> meses</span></div>
+                    <div class="hud-contract-item"><label>Tasa Retorno</label><span><?= number_format($tasaAnual, 2) ?>% anual</span></div>
+                    <div class="hud-contract-item"><label>Amortización</label><span><?= htmlspecialchars((string)($ev['tipo_amortizacion'] ?? 'N/D')) ?></span></div>
+                    <div class="hud-contract-item"><label>Total Proyectado</label><span>RD$ <?= number_format($totalPagar, 2) ?></span></div>
+                </div>
+                
+                <!-- CONSOLA DE SISTEMA Y ALERTAS -->
+                <div class="hud-system-console">
+                    <div class="console-header">STATUS DEL SISTEMA: 
+                        <?php
+                          if ($decision === 'Aprobado') echo '🟢 LISTO PARA DESEMBOLSO';
+                          elseif ($decision === 'Rechazado') echo '🔴 OPERACIÓN DENEGADA';
+                          elseif ($decision === 'Contrapropuesta') echo '🟡 VALIDACIÓN TÁCTICA PENDIENTE';
+                          elseif ($decision === 'Revision_manual') echo '🟠 REQUERIDA INTERVENCIÓN HUMANA';
+                          else echo '⚪ PENDIENTE';
+                        ?>
+                    </div>
+                    
+                    <?php if ($decision === 'Rechazado' && !empty($razones)): ?>
+                    <ul class="console-log log-error">
+                      <?php foreach ($razones as $r): ?>
+                      <li>[CRÍTICO] <?= htmlspecialchars($r) ?></li>
+                      <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+
+                    <?php if ($decision === 'Revision_manual' || $decision === 'Pendiente'): ?>
+                    <div class="console-log log-warning">
+                        > [ALERTA] Análisis algorítmico pausado. Se requiere revisión manual por un analista de crédito para emitir veredicto final.
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
-          </div>
+
         </div>
-      </div>
     </div>
   </main>
 </div>

@@ -43,6 +43,12 @@ function setupModalListeners() {
                 closeModal(openModal.id);
             }
         }
+
+    document.addEventListener('DOMContentLoaded', function () {
+    initializeConfiguracion();
+    loadDefaultData();
+    loadCatalogosEvaluacion(); // <-- Añadir esta línea
+});
     });
 }
 
@@ -67,6 +73,9 @@ function loadTabData(tab) {
             break;
         case 'auditoria':
             loadAuditoria();
+            break;
+        case 'parametros_cp':
+            loadParametrosCP();
             break;
         case 'fondos':
             loadFondos();
@@ -792,8 +801,9 @@ async function loadTipoPrestamo() {
                 <td>${item.nombre}</td>
                 <td>${parseFloat(item.tasa_interes).toFixed(2)}%</td>
                 <td>$${parseFloat(item.monto_minimo).toFixed(2)}</td>
-                <td>${item.plazo_minimo_meses}</td>
-                <td>${item.plazo_maximo_meses}</td>
+                <td>${item.plazo_minimo_meses} m</td>
+                <td>${item.plazo_maximo_meses} m</td>
+                <td>${parseFloat(item.porcentaje_capacidad || 40).toFixed(2)}%</td>
                 <td class="table-actions">
                     <button class="action-btn edit" onclick="editTipoPrestamo(${item.id_tipo_prestamo})">
                         Editar
@@ -813,15 +823,20 @@ async function loadTipoPrestamo() {
 async function editTipoPrestamo(id) {
     try {
         const response = await apiRequest('tipo_prestamo', 'list');
-        const item = response.data.find(tp => tp.id_tipo_prestamo == id);
+        const item = response.data.find(tp => Number(tp.id_tipo_prestamo) === Number(id));
 
         if (item) {
+            // El campo oculto se llama idTipoPrestamo en el HTML
             document.getElementById('idTipoPrestamo').value = item.id_tipo_prestamo;
+            
             document.getElementById('nombreTipoPrestamo').value = item.nombre;
             document.getElementById('tasaInteresTipoPrestamo').value = item.tasa_interes;
             document.getElementById('montoMinimoTipoPrestamo').value = item.monto_minimo;
+            document.getElementById('tipoAmortizacionTipoPrestamo').value = item.id_tipo_amortizacion || 1; // Faltaba mapear esto
             document.getElementById('plazoMinimoTipoPrestamo').value = item.plazo_minimo_meses;
             document.getElementById('plazoMaximoTipoPrestamo').value = item.plazo_maximo_meses;
+            document.getElementById('porcentajeCapacidadTipoPrestamo').value = item.porcentaje_capacidad || 40;
+            
             document.getElementById('titleTipoPrestamo').textContent = 'Editar Tipo de Préstamo';
             openModal('modalTipoPrestamo');
         }
@@ -829,7 +844,6 @@ async function editTipoPrestamo(id) {
         console.error('Error editando tipo de préstamo:', error);
     }
 }
-
 async function deleteTipoPrestamo(id) {
     if (!confirm('¿Está seguro de que desea eliminar este tipo de préstamo?')) return;
 
@@ -868,15 +882,15 @@ async function loadAuditoria() {
             const fechaFormateada = new Date(item.fecha_cambio).toLocaleString('es-ES');
 
             row.innerHTML = `
-                <td>${fechaFormateada}</td>
-                <td>${item.tabla_afectada}</td>
-                <td>${item.id_registro}</td>
-                <td><span class="status-badge ${item.tipo_cambio.toLowerCase()}">${item.tipo_cambio}</span></td>
-                <td>${item.usuario}</td>
+                <td>${item.nombre}</td>
+                <td>${parseFloat(item.tasa_interes).toFixed(2)}%</td>
+                <td>$${parseFloat(item.monto_minimo).toFixed(2)}</td>
+                <td>${item.plazo_minimo_meses} m</td>
+                <td>${item.plazo_maximo_meses} m</td>
+                <td>${parseFloat(item.porcentaje_capacidad || 40).toFixed(2)}%</td>
                 <td class="table-actions">
-                    <button class="action-btn view" onclick="viewAuditoriaDetail(${item.id_auditoria})">
-                        Ver Detalle
-                    </button>
+                    <button class="action-btn edit" onclick="editTipoPrestamo(${item.id_tipo_prestamo})">Editar</button>
+                    <button class="action-btn delete" onclick="deleteTipoPrestamo(${item.id_tipo_prestamo})">Eliminar</button>
                 </td>
             `;
             tbody.appendChild(row);
@@ -1206,7 +1220,8 @@ function closeModal(modalId) {
                     hiddenId.value = '';
                 }
                 const title = modal.querySelector('.modal-header h3');
-                if (title) {
+                // IMPORTANTE: Evitamos que cambie el título si es el modal de IA
+                if (title && modalId !== 'modalParametroCP') {
                     title.textContent = title.textContent.replace('Editar', 'Agregar');
                 }
             }
@@ -1536,5 +1551,103 @@ async function saveReglaPuntaje(e) {
     } catch (error) {
         alert('Error al guardar');
         console.error('Error al guardar regla de puntaje:', error);
+    }
+}
+
+// --- NUEVA FUNCIÓN PARA LOS SELECTS DE EVALUACIÓN ---
+async function loadCatalogosEvaluacion() {
+    try {
+        const res = await apiRequest('catalogos_evaluacion', 'list');
+        
+        const selRiesgo = document.getElementById('idNivelRiesgo');
+        if (selRiesgo && res.riesgos) {
+            selRiesgo.innerHTML = '<option value="">Seleccione Nivel...</option>' + 
+                res.riesgos.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
+        }
+        
+        const selDec = document.getElementById('idDecisionEvaluacion');
+        if (selDec && res.decisiones) {
+            selDec.innerHTML = '<option value="">Seleccione Decisión...</option>' + 
+                res.decisiones.map(d => `<option value="${d.id}">${d.nombre}</option>`).join('');
+        }
+    } catch (e) {
+        console.error("Error cargando catálogos de evaluación", e);
+    }
+}
+
+// --- FUNCIONES PARA REGLAS DE CONTRAPROPUESTAS (NUEVO) ---
+async function loadParametrosCP() {
+    try {
+        const response = await apiRequest('parametros_cp', 'list');
+        const tbody = document.querySelector('#tableParametrosCP tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = response.data.map(item => {
+            const bMonto = item.cp_permitir_monto === 'Si' ? `<span class="status-badge activo">SÍ (+${item.cp_upsell_pct}% / -${item.cp_downsell_pct}%)</span>` : `<span class="status-badge inactivo">NO</span>`;
+            const bPlazo = item.cp_permitir_plazo === 'Si' ? `<span class="status-badge activo">SÍ (x${item.cp_factor_plazo})</span>` : `<span class="status-badge inactivo">NO</span>`;
+            const bTasa = item.cp_permitir_tasa === 'Si' ? `<span class="status-badge activo">SÍ (Piso: ${item.cp_tasa_minima}%)</span>` : `<span class="status-badge inactivo">NO</span>`;
+
+            return `
+            <tr>
+                <td style="font-weight: 900; color: #1e1b4b; font-size:1.1rem;">${item.nombre}</td>
+                <td>${bMonto}</td>
+                <td>${bPlazo}</td>
+                <td>${bTasa}</td>
+                <td class="table-actions">
+                    <button class="action-btn edit" onclick='editParametroCP(${JSON.stringify(item)})'>Configurar Límite</button>
+                </td>
+            </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error cargando parámetros de Contrapropuesta:', error);
+    }
+}
+
+async function saveParametroCP(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+
+    try {
+        await apiRequest('parametros_cp', 'save', data);
+        closeModal('modalParametroCP');
+        event.target.reset();
+        loadParametrosCP();
+    } catch (error) {
+        alert(error.message || 'Error guardando el parámetro');
+    }
+}
+
+window.editParametroCP = function(item) {
+    document.getElementById('idParametroCP').value = item.id_tipo_prestamo;
+    
+    document.getElementById('nombreParametroCP').value = item.nombre; 
+    
+    document.getElementById('p_monto').value = item.cp_permitir_monto || 'No';
+    document.getElementById('p_upsell').value = item.cp_upsell_pct || '0';
+    document.getElementById('p_downsell').value = item.cp_downsell_pct || '0';
+    
+    document.getElementById('p_plazo').value = item.cp_permitir_plazo || 'No';
+    document.getElementById('p_factor').value = item.cp_factor_plazo || '1';
+    
+    document.getElementById('p_tasa').value = item.cp_permitir_tasa || 'No';
+    document.getElementById('p_tasa_min').value = item.cp_tasa_minima || '0';
+    
+    document.getElementById('p_amort').value = item.cp_permitir_amortizacion || 'No';
+
+    openModal('modalParametroCP');
+}
+
+async function saveParametroCP(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+
+    try {
+        await apiRequest('parametros_cp', 'save', data);
+        closeModal('modalParametroCP');
+        event.target.reset();
+        loadParametrosCP();
+    } catch (error) {
+        alert(error.message || 'Error guardando el parámetro');
     }
 }
